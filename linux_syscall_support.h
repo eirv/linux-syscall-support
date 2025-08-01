@@ -2855,17 +2855,33 @@ struct kernel_utsname {
     #undef LSS_REG
     #define LSS_REG(r,a) register long __r##r __asm__("r"#r) = (long)a
     #undef  LSS_BODY
+    #undef LSS_if_constexpr
+    #if defined(__cplusplus) && __cplusplus >= 201703L
+      #define LSS_if_constexpr if constexpr
+    #else
+      #define LSS_if_constexpr if
+    #endif
     #ifdef __thumb__
       #define LSS_BODY(type,name,args...)                                     \
             register long __res_r0 __asm__("r0");                             \
             long __res;                                                       \
-            __asm__ __volatile__ ("push {r7}\n"                               \
-                                  "mov r7, %1\n"                              \
-                                  "swi 0x0\n"                                 \
-                                  "pop {r7}\n"                                \
-                                  : "=r"(__res_r0)                            \
-                                  : "i"(__NR_##name) , ## args                \
-                                  : "lr", "memory");                          \
+            LSS_if_constexpr (__NR_##name > 0xf0000)                          \
+              __asm__ __volatile__ ("push {r7}\n"                             \
+                                    "mov r7, #0xf0000\n"                      \
+                                    "add r7, r7, %1\n"                        \
+                                    "swi 0x0\n"                               \
+                                    "pop {r7}\n"                              \
+                                    : "=r"(__res_r0)                          \
+                                    : "i"(__NR_##name - 0xf0000) , ## args    \
+                                    : "lr", "memory");                        \
+            else                                                              \
+              __asm__ __volatile__ ("push {r7}\n"                             \
+                                    "mov r7, %1\n"                            \
+                                    "swi 0x0\n"                               \
+                                    "pop {r7}\n"                              \
+                                    : "=r"(__res_r0)                          \
+                                    : "i"(__NR_##name) , ## args              \
+                                    : "lr", "memory");                        \
             __res = __res_r0;                                                 \
             LSS_RETURN(type, __res)
     #else
@@ -5633,16 +5649,33 @@ LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *co
   return LSS_NAME(execveat)(fd, "", argv, envp, AT_EMPTY_PATH);
 }
 
+#ifdef __i386__
+LSS_INLINE _syscall2(int, arch_prctl, int, op, void *, addr)
+#elif defined(__ARM_ARCH_3__) || defined(__ARM_EABI__)
+#ifndef __NR_arm_breakpoint
+#define __NR_arm_breakpoint 0xf0001
+#endif
+#ifndef __NR_arm_cacheflush
+#define __NR_arm_cacheflush 0xf0002
+#endif
+#ifndef __NR_arm_set_tls
+#define __NR_arm_set_tls 0xf0005
+#endif
+#ifndef __NR_arm_get_tls
+#define __NR_arm_get_tls 0xf0006
+#endif
+LSS_INLINE _syscall0(int, arm_breakpoint)
+LSS_INLINE _syscall3(int, arm_cacheflush, void *, start, void *, end, int, flags)
+LSS_INLINE _syscall1(int, arm_set_tls, void *, tls)
+LSS_INLINE _syscall0(void *, arm_get_tls)
+#endif
+
 #ifdef __NR_access
 LSS_INLINE _syscall2(int, access, const char *, pathname, int, mode)
 #else
 LSS_INLINE int LSS_NAME(access)(const char *pathname, int mode) {
   return LSS_NAME(faccessat)(AT_FDCWD, pathname, mode, 0);
 }
-#endif
-
-#ifdef __i386__
-LSS_INLINE _syscall2(int, arch_prctl, int, op, void *, addr)
 #endif
 
 #ifdef __NR_creat
