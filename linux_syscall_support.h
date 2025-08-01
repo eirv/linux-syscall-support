@@ -78,8 +78,16 @@
  * Do not access these symbols from outside this file. They are not part
  * of the supported API.
  */
+
+#if !defined(LSS_INCLUDED) && defined(LSS_HAS_ERRNO) && LSS_HAS_ERRNO != -1 && LSS_HAS_ERRNO != defined(SYS_ERRNO)
+#define LSS_INCLUDED
+#undef SYS_LINUX_SYSCALL_SUPPORT_H
+#endif
+
 #ifndef SYS_LINUX_SYSCALL_SUPPORT_H
 #define SYS_LINUX_SYSCALL_SUPPORT_H
+
+// clang-format off
 
 /* We currently only support x86-32, x86-64, ARM, MIPS, PPC, s390 and s390x
  * on Linux.
@@ -91,16 +99,7 @@
      (defined(__riscv) && __riscv_xlen == 64) || defined(__loongarch_lp64))  \
   && (defined(__linux) || defined(__ANDROID__))
 
-#ifndef SYS_CPLUSPLUS
-#ifdef __cplusplus
-/* Some system header files in older versions of gcc neglect to properly
- * handle being included from C++. As it appears to be harmless to have
- * multiple nested 'extern "C"' blocks, just add another one here.
- */
-extern "C" {
-#endif
-
-#include <errno.h>
+#ifndef LSS_INCLUDED
 #include <fcntl.h>
 #include <sched.h>
 #include <signal.h>
@@ -114,6 +113,7 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <linux/errno.h>
 #include <linux/unistd.h>
 #include <endian.h>
 
@@ -128,6 +128,11 @@ extern "C" {
 #include <sgidefs.h>
 #endif
 #endif
+#endif
+#endif
+
+#ifdef __cplusplus
+inline namespace lss {
 #endif
 
 /* Some libcs, for example Android NDK and musl, #define these
@@ -202,6 +207,7 @@ extern "C" {
  *   them, because glibc defines a global macro by the same name.
  */
 
+#ifndef LSS_INCLUDED
 /* include/linux/dirent.h                                                    */
 struct kernel_dirent64 {
   unsigned long long d_ino;
@@ -872,6 +878,24 @@ struct kernel_statx {
   uint64_t  __spare2;
   uint64_t  __spare3[12];
 };
+
+struct kernel_utsname {
+  char sysname[65];
+  char nodename[65];
+  char release[65];
+  char version[65];
+  char machine[65];
+  char domainname[65];
+};
+
+#undef LSS_LP_SELECT
+#ifdef __LP64__
+#define LSS_LP_SELECT(lp64, lp32) lp64
+#else
+#define LSS_LP_SELECT(lp64, lp32) lp32
+#endif
+
+#define kernelc_stat LSS_LP_SELECT(kernel_stat, kernel_stat64)
 
 /* Definitions missing from the standard header files                        */
 #ifndef O_DIRECTORY
@@ -2008,6 +2032,7 @@ struct kernel_statx {
 #endif /* __s390__ */
 /* End of s390/s390x definitions                                             */
 #endif
+#endif
 
 
 /* After forking, we must make sure to only call system calls.               */
@@ -2027,8 +2052,20 @@ struct kernel_statx {
      * be useful when using clone() with the CLONE_VM option.
      */
     #define LSS_ERRNO SYS_ERRNO
+    #ifdef LSS_HAS_ERRNO
+      #undef LSS_HAS_ERRNO
+      #define LSS_HAS_ERRNO -1
+    #else
+      #define LSS_HAS_ERRNO 1
+    #endif
   #else
     #define LSS_ERRNO errno
+    #ifdef LSS_HAS_ERRNO
+      #undef LSS_HAS_ERRNO
+      #define LSS_HAS_ERRNO -1
+    #else
+      #define LSS_HAS_ERRNO 0
+    #endif
   #endif
 
   #undef LSS_INLINE
@@ -2042,10 +2079,17 @@ struct kernel_statx {
    * system calls. By default, it will be set to "sys_".
    */
   #undef LSS_NAME
+  #undef LSS_NAME_COMPAT
   #ifndef SYS_PREFIX
-    #define LSS_NAME(name) sys_##name
+    #ifdef SYS_ERRNO
+      #define LSS_NAME(name) sys_##name
+    #else
+      #define LSS_NAME(name) raw_##name
+      #define LSS_NAME_COMPAT(name) rawc_##name
+    #endif
   #elif defined(SYS_PREFIX) && SYS_PREFIX < 0
     #define LSS_NAME(name) name
+    #define LSS_NAME_COMPAT(name) name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 0
     #define LSS_NAME(name) sys0_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 1
@@ -2067,6 +2111,9 @@ struct kernel_statx {
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 9
     #define LSS_NAME(name) sys9_##name
   #endif
+  #ifndef LSS_NAME_COMPAT
+    #define LSS_NAME_COMPAT(name) sysc_##name
+  #endif
 
   #undef  LSS_RETURN
   #if defined(__i386__) || defined(__x86_64__) || defined(__ARM_ARCH_3__) \
@@ -2075,39 +2122,66 @@ struct kernel_statx {
   /* Failing system calls return a negative result in the range of
    * -1..-4095. These are "errno" values with the sign inverted.
    */
-  #define LSS_RETURN(type, res)                                               \
-    do {                                                                      \
-      if ((unsigned long)(res) >= (unsigned long)(-4095)) {                   \
-        LSS_ERRNO = (int)(-(res));                                            \
-        res = -1;                                                             \
-      }                                                                       \
-      return (type) (res);                                                    \
-    } while (0)
+  #ifdef SYS_ERRNO
+    #define LSS_RETURN(type, res)                                             \
+      do {                                                                    \
+        if ((unsigned long)(res) >= (unsigned long)(-4095)) {                 \
+          LSS_ERRNO = (int)(-(res));                                          \
+          res = -1;                                                           \
+        }                                                                     \
+        return (type) (res);                                                  \
+      } while (0)
+  #else
+    #define LSS_RETURN(type, res)                                             \
+      do {                                                                    \
+        return (type) (res);                                                  \
+      } while (0)
+  #endif
   #elif defined(__mips__)
   /* On MIPS, failing system calls return -1, and set errno in a
    * separate CPU register.
    */
-  #define LSS_RETURN(type, res, err)                                          \
-    do {                                                                      \
-      if (err) {                                                              \
-        unsigned long __errnovalue = (res);                                   \
-        LSS_ERRNO = __errnovalue;                                             \
-        res = -1;                                                             \
-      }                                                                       \
-      return (type) (res);                                                    \
-    } while (0)
+  #ifdef SYS_ERRNO
+    #define LSS_RETURN(type, res, err)                                        \
+      do {                                                                    \
+        if (err) {                                                            \
+          unsigned long __errnovalue = (res);                                 \
+          LSS_ERRNO = __errnovalue;                                           \
+          res = -1;                                                           \
+        }                                                                     \
+        return (type) (res);                                                  \
+      } while (0)
+  #else
+    #define LSS_RETURN(type, res, err)                                        \
+      do {                                                                    \
+        if (err) {                                                            \
+          return -(res);                                                      \
+        }                                                                     \
+        return (type) (res);                                                  \
+      } while (0)
+  #endif
   #elif defined(__PPC__)
   /* On PPC, failing system calls return -1, and set errno in a
    * separate CPU register. See linux/unistd.h.
    */
-  #define LSS_RETURN(type, res, err)                                          \
-   do {                                                                       \
-     if (err & 0x10000000 ) {                                                 \
-       LSS_ERRNO = (res);                                                     \
-       res = -1;                                                              \
-     }                                                                        \
-     return (type) (res);                                                     \
-   } while (0)
+  #ifdef SYS_ERRNO
+    #define LSS_RETURN(type, res, err)                                        \
+     do {                                                                     \
+       if (err & 0x10000000 ) {                                               \
+         LSS_ERRNO = (res);                                                   \
+         res = -1;                                                            \
+       }                                                                      \
+       return (type) (res);                                                   \
+     } while (0)
+  #else
+    #define LSS_RETURN(type, res, err)                                        \
+     do {                                                                     \
+       if (err & 0x10000000 ) {                                               \
+         return -(res);                                                       \
+       }                                                                      \
+       return (type) (res);                                                   \
+     } while (0)
+  #endif
   #endif
   #if defined(__i386__)
     /* In PIC mode (e.g. when building shared libraries), gcc for i386
@@ -2429,14 +2503,21 @@ struct kernel_statx {
     #undef  LSS_SYSCALL_ARG
     #define LSS_SYSCALL_ARG(a) ((uint64_t)(uintptr_t)(a))
     #undef  _LSS_RETURN
-    #define _LSS_RETURN(type, res, cast)                                      \
-      do {                                                                    \
-        if ((uint64_t)(res) >= (uint64_t)(-4095)) {                           \
-          LSS_ERRNO = (int)(-(res));                                          \
-          res = -1;                                                           \
-        }                                                                     \
-        return (type)(cast)(res);                                             \
-      } while (0)
+    #ifdef SYS_ERRNO
+      #define _LSS_RETURN(type, res, cast)                                    \
+        do {                                                                  \
+          if ((uint64_t)(res) >= (uint64_t)(-4095)) {                         \
+            LSS_ERRNO = (int)(-(res));                                        \
+            res = -1;                                                         \
+          }                                                                   \
+          return (type)(cast)(res);                                           \
+        } while (0)
+    #else
+      #define _LSS_RETURN(type, res, cast)                                    \
+        do {                                                                  \
+          return (type)(cast)(res);                                           \
+        } while (0)
+    #endif
     #undef  LSS_RETURN
     #define LSS_RETURN(type, res) _LSS_RETURN(type, res, uintptr_t)
 
@@ -2774,18 +2855,31 @@ struct kernel_statx {
     #undef LSS_REG
     #define LSS_REG(r,a) register long __r##r __asm__("r"#r) = (long)a
     #undef  LSS_BODY
-    #define LSS_BODY(type,name,args...)                                       \
-          register long __res_r0 __asm__("r0");                               \
-          long __res;                                                         \
-          __asm__ __volatile__ ("push {r7}\n"                                 \
-                                "mov r7, %1\n"                                \
-                                "swi 0x0\n"                                   \
-                                "pop {r7}\n"                                  \
-                                : "=r"(__res_r0)                              \
-                                : "i"(__NR_##name) , ## args                  \
-                                : "lr", "memory");                            \
-          __res = __res_r0;                                                   \
-          LSS_RETURN(type, __res)
+    #ifdef __thumb__
+      #define LSS_BODY(type,name,args...)                                     \
+            register long __res_r0 __asm__("r0");                             \
+            long __res;                                                       \
+            __asm__ __volatile__ ("push {r7}\n"                               \
+                                  "mov r7, %1\n"                              \
+                                  "swi 0x0\n"                                 \
+                                  "pop {r7}\n"                                \
+                                  : "=r"(__res_r0)                            \
+                                  : "i"(__NR_##name) , ## args                \
+                                  : "lr", "memory");                          \
+            __res = __res_r0;                                                 \
+            LSS_RETURN(type, __res)
+    #else
+      #define LSS_BODY(type,name,args...)                                     \
+            register long __res_r0 __asm__("r0");                             \
+            register long __r7 __asm__("r7") = __NR_##name;                   \
+            long __res;                                                       \
+            __asm__ __volatile__ ("swi 0x0\n"                                 \
+                                  : "=r"(__res_r0)                            \
+                                  : "r"(__r7) , ## args                       \
+                                  : "memory");                                \
+            __res = __res_r0;                                                 \
+            LSS_RETURN(type, __res)
+    #endif
     #undef _syscall0
     #define _syscall0(type, name)                                             \
       type LSS_NAME(name)(void) {                                             \
@@ -2840,8 +2934,12 @@ struct kernel_statx {
                                    void *newtls, int *child_tidptr) {
       long __res;
       if (fn == NULL || child_stack == NULL) {
+#ifdef SYS_ERRNO
         __res = -EINVAL;
         LSS_RETURN(int, __res);
+#else
+        return -EINVAL;
+#endif
       }
 
       /* Push "arg" and "fn" onto the stack that will be
@@ -2918,12 +3016,12 @@ struct kernel_statx {
     #undef  LSS_BODY
     #define LSS_BODY(type,name,args...)                                       \
           register int64_t __res_x0 __asm__("x0");                            \
+          register int32_t __w8 __asm__("w8") = __NR_##name;                  \
           int64_t __res;                                                      \
-          __asm__ __volatile__ ("mov x8, %1\n"                                \
-                                "svc 0x0\n"                                   \
+          __asm__ __volatile__ ("svc 0x0\n"                                   \
                                 : "=r"(__res_x0)                              \
-                                : "i"(__NR_##name) , ## args                  \
-                                : "x8", "memory");                            \
+                                : "r"(__w8) , ## args                         \
+                                : "memory");                                  \
           __res = __res_x0;                                                   \
           LSS_RETURN(type, __res)
     #undef _syscall0
@@ -2997,7 +3095,7 @@ struct kernel_statx {
                               *               %x3 = newtls,
                               *               %x4 = child_tidptr)
                               */
-                             "mov     x8, %8\n"
+                             "mov     w8, %8\n"
                              "svc     0x0\n"
 
                              /* if (%r0 != 0)
@@ -3013,7 +3111,7 @@ struct kernel_statx {
 
                              /* Call _exit(%r0).
                               */
-                             "mov     x8, %9\n"
+                             "mov     w8, %9\n"
                              "svc     0x0\n"
                            "1:\n"
                              : "=r" (__res)
@@ -3044,7 +3142,7 @@ struct kernel_statx {
                            * sequence to unwind from * signal handlers. Do not
                            * modify the next two instructions.
                            */
-                          "mov     x8, %1\n"
+                          "mov     w8, %1\n"
                           "svc     0x0\n"
                         "2:\n"
                           "adr     %0, 1b\n"
@@ -4531,8 +4629,12 @@ struct kernel_statx {
                                          gid_t *egid,
                                          gid_t *sgid) {
       int rc;
+#ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
+#else
+      if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) == -ENOSYS) {
+#endif
         if ((rgid == NULL) || (egid == NULL) || (sgid == NULL)) {
           return EFAULT;
         }
@@ -4547,8 +4649,12 @@ struct kernel_statx {
                                          uid_t *euid,
                                          uid_t *suid) {
       int rc;
+#ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
+#else
+      if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) == -ENOSYS) {
+#endif
         if ((ruid == NULL) || (euid == NULL) || (suid == NULL)) {
           return EFAULT;
         }
@@ -4561,8 +4667,12 @@ struct kernel_statx {
 
     LSS_INLINE int LSS_NAME(setfsgid32)(gid_t gid) {
       int rc;
+#ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setfsgid32)(gid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
+#else
+      if ((rc = LSS_NAME(_setfsgid32)(gid)) == -ENOSYS) {
+#endif
         if ((unsigned int)gid & ~0xFFFFu) {
           rc = EINVAL;
         } else {
@@ -4574,8 +4684,12 @@ struct kernel_statx {
 
     LSS_INLINE int LSS_NAME(setfsuid32)(uid_t uid) {
       int rc;
+#ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setfsuid32)(uid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
+#else
+      if ((rc = LSS_NAME(_setfsuid32)(uid))  == -ENOSYS) {
+#endif
         if ((unsigned int)uid & ~0xFFFFu) {
           rc = EINVAL;
         } else {
@@ -4587,8 +4701,12 @@ struct kernel_statx {
 
     LSS_INLINE int LSS_NAME(setresgid32)(gid_t rgid, gid_t egid, gid_t sgid) {
       int rc;
+#ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
+#else
+      if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid))  == -ENOSYS) {
+#endif
         if ((unsigned int)rgid & ~0xFFFFu ||
             (unsigned int)egid & ~0xFFFFu ||
             (unsigned int)sgid & ~0xFFFFu) {
@@ -4602,8 +4720,12 @@ struct kernel_statx {
 
     LSS_INLINE int LSS_NAME(setresuid32)(uid_t ruid, uid_t euid, uid_t suid) {
       int rc;
+#ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
+#else
+      if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid))  == -ENOSYS) {
+#endif
         if ((unsigned int)ruid & ~0xFFFFu ||
             (unsigned int)euid & ~0xFFFFu ||
             (unsigned int)suid & ~0xFFFFu) {
@@ -4628,8 +4750,12 @@ struct kernel_statx {
   LSS_INLINE int LSS_NAME(sigaddset)(struct kernel_sigset_t *set,
                                      int signum) {
     if (signum < 1 || (size_t)signum > (8*sizeof(set->sig))) {
+#ifdef SYS_ERRNO
       LSS_ERRNO = EINVAL;
       return -1;
+#else
+      return -EINVAL;
+#endif
     } else {
       set->sig[(size_t)(signum - 1)/(8*sizeof(set->sig[0]))]
           |= 1UL << ((size_t)(signum - 1) % (8*sizeof(set->sig[0])));
@@ -4640,8 +4766,12 @@ struct kernel_statx {
   LSS_INLINE int LSS_NAME(sigdelset)(struct kernel_sigset_t *set,
                                         int signum) {
     if (signum < 1 || (size_t)signum > (8*sizeof(set->sig))) {
+#ifdef SYS_ERRNO
       LSS_ERRNO = EINVAL;
       return -1;
+#else
+      return -EINVAL;
+#endif
     } else {
       set->sig[(size_t)(signum - 1)/(8*sizeof(set->sig[0]))]
           &= ~(1UL << ((size_t)(signum - 1) % (8*sizeof(set->sig[0]))));
@@ -4652,8 +4782,12 @@ struct kernel_statx {
   LSS_INLINE int LSS_NAME(sigismember)(struct kernel_sigset_t *set,
                                           int signum) {
     if (signum < 1 || (size_t)signum > (8*sizeof(set->sig))) {
+#ifdef SYS_ERRNO
       LSS_ERRNO = EINVAL;
       return -1;
+#else
+      return -EINVAL;
+#endif
     } else {
       return !!(set->sig[(size_t)(signum - 1)/(8*sizeof(set->sig[0]))] &
                 (1UL << ((size_t)(signum - 1) % (8*sizeof(set->sig[0])))));
@@ -4707,7 +4841,9 @@ struct kernel_statx {
     LSS_INLINE int LSS_NAME(sigaction)(int signum,
                                        const struct kernel_sigaction *act,
                                        struct kernel_sigaction *oldact) {
+#ifdef SYS_ERRNO
       int old_errno = LSS_ERRNO;
+#endif
       int rc;
       struct kernel_sigaction a;
       if (act != NULL) {
@@ -4732,7 +4868,11 @@ struct kernel_statx {
       }
       rc = LSS_NAME(rt_sigaction)(signum, act ? &a : act, oldact,
                                   (KERNEL_NSIG+7)/8);
+#ifdef SYS_ERRNO
       if (rc < 0 && LSS_ERRNO == ENOSYS) {
+#else
+      if (rc == -ENOSYS) {
+#endif
         struct kernel_old_sigaction oa, ooa, *ptr_a = &oa, *ptr_oa = &ooa;
         if (!act) {
           ptr_a            = NULL;
@@ -4747,7 +4887,9 @@ struct kernel_statx {
         if (!oldact) {
           ptr_oa           = NULL;
         }
+#ifdef SYS_ERRNO
         LSS_ERRNO = old_errno;
+#endif
         rc = LSS_NAME(_sigaction)(signum, ptr_a, ptr_oa);
         if (rc == 0 && oldact) {
           if (act) {
@@ -4767,10 +4909,15 @@ struct kernel_statx {
     }
 
     LSS_INLINE int LSS_NAME(sigpending)(struct kernel_sigset_t *set) {
+#ifdef SYS_ERRNO
       int old_errno = LSS_ERRNO;
       int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
       if (rc < 0 && LSS_ERRNO == ENOSYS) {
         LSS_ERRNO = old_errno;
+#else
+      int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
+      if (rc == -ENOSYS) {
+#endif
         LSS_NAME(sigemptyset)(set);
         rc = LSS_NAME(_sigpending)(&set->sig[0]);
       }
@@ -4778,10 +4925,15 @@ struct kernel_statx {
     }
 
     LSS_INLINE int LSS_NAME(sigsuspend)(const struct kernel_sigset_t *set) {
+#ifdef SYS_ERRNO
       int olderrno = LSS_ERRNO;
       int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
       if (rc < 0 && LSS_ERRNO == ENOSYS) {
         LSS_ERRNO = olderrno;
+#else
+      int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
+      if (rc == -ENOSYS) {
+#endif
         rc = LSS_NAME(_sigsuspend)(
         #ifndef __PPC__
                                    set, 0,
@@ -4814,8 +4966,12 @@ struct kernel_statx {
     LSS_INLINE void* LSS_NAME(mmap)(void *s, size_t l, int p, int f, int d,
                                     int64_t o) {
       if (o % 4096) {
+#ifdef SYS_ERRNO
         LSS_ERRNO = EINVAL;
         return (void *) -1;
+#else
+        return (void*)-EINVAL;
+#endif
       }
       return LSS_NAME(_mmap2)(s, l, p, f, d, (o / 4096));
     }
@@ -5011,9 +5167,13 @@ struct kernel_statx {
                             : "$8", "$9", "$10", "$11", "$12",
                               "$13", "$14", "$15", "$24", "$25", "memory");
       if (__r7) {
+#ifdef SYS_ERRNO
         unsigned long __errnovalue = __v0;
         LSS_ERRNO = __errnovalue;
         return -1;
+#else
+        return -__v0;
+#endif
       } else {
         p[0] = __v0;
         p[1] = __v1;
@@ -5084,6 +5244,7 @@ struct kernel_statx {
      * processing SIGCONT.
      */
     long rc;
+#ifdef SYS_ERRNO
     int err;
     LSS_NAME(sched_yield)();
     rc = LSS_NAME(ptrace)(PTRACE_DETACH, pid, (void *)0, (void *)0);
@@ -5093,6 +5254,13 @@ struct kernel_statx {
     if (LSS_ERRNO == ENOSYS)
       LSS_NAME(kill)(pid, SIGCONT);
     LSS_ERRNO = err;
+#else
+    LSS_NAME(sched_yield)();
+    rc = LSS_NAME(ptrace)(PTRACE_DETACH, pid, (void *)0, (void *)0);
+    /* Old systems don't have tkill */
+    if (LSS_NAME(tkill)(pid, SIGCONT) == -ENOSYS)
+      LSS_NAME(kill)(pid, SIGCONT);
+#endif
     return rc;
   }
 
@@ -5358,6 +5526,154 @@ struct kernel_statx {
 # endif
 #endif
 
+#ifndef SYS_ERRNO
+#undef RAW_TEMP_FAILURE_RETRY
+#define RAW_TEMP_FAILURE_RETRY(exp) ({                                        \
+  __typeof__(exp) _rc;                                                        \
+  do {                                                                        \
+    _rc = (exp);                                                              \
+  } while (_rc == -EINTR);                                                    \
+  _rc; })
+#endif
+
+LSS_INLINE int LSS_NAME_COMPAT(fstat)(int fd, struct kernelc_stat *buf) {
+  return LSS_LP_SELECT(LSS_NAME(fstat), LSS_NAME(fstat64))(fd, buf);
+}
+
+LSS_INLINE int LSS_NAME_COMPAT(fstatat)(int dirfd, const char *pathname, struct kernelc_stat *buf, int flags) {
+  return LSS_LP_SELECT(LSS_NAME(newfstatat), LSS_NAME(fstatat64))(dirfd, pathname, buf, flags);
+}
+
+LSS_INLINE _syscall5(int, execveat, int, dirfd, const char *, pathname, const char *const *, argv, const char *const *, envp, int, flags)
+LSS_INLINE _syscall1(int, fchdir, int, fd)
+LSS_INLINE _syscall2(int, fchmod, int, fd, mode_t, mode)
+LSS_INLINE _syscall3(int, fchmodat, int, dirfd, const char *, pathname, mode_t, mode)
+LSS_INLINE _syscall4(int, faccessat, int, dirfd, const char *, pathname, int, mode, int, flags)
+LSS_INLINE _syscall2(int, getcwd, char *, buf, size_t, size)
+LSS_INLINE _syscall0(gid_t, getgid)
+LSS_INLINE _syscall0(uid_t, getuid)
+LSS_INLINE _syscall5(int, linkat, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, int, flags)
+LSS_INLINE _syscall2(int, memfd_create, const char *, name, unsigned int, flags)
+LSS_INLINE _syscall3(int, mkdirat, int, dirfd, const char *, name, mode_t, mode)
+LSS_INLINE _syscall3(int, madvise, void *, addr, size_t, size, int, behavior)
+LSS_INLINE _syscall3(int, mincore, void *, addr, size_t, size, unsigned char *, vec)
+LSS_INLINE _syscall2(int, mlock, void *, addr, size_t, size)
+LSS_INLINE _syscall3(int, mlock2, void *, addr, size_t, size, int, flags)
+LSS_INLINE _syscall1(int, mlockall, int, flags)
+LSS_INLINE _syscall3(int, msync, void *, addr, size_t, size, int, flags)
+LSS_INLINE _syscall2(int, munlock, void *, addr, size_t, size)
+LSS_INLINE _syscall0(int, munlockall)
+LSS_INLINE _syscall1(int, personality, unsigned long, persona)
+LSS_INLINE _syscall6(ssize_t, process_vm_readv, pid_t, pid, const struct kernel_iovec *, local_iov, unsigned long, local_iov_count, const struct kernel_iovec *, remote_iov, unsigned long, remote_iov_count, unsigned long, flags)
+LSS_INLINE _syscall6(ssize_t, process_vm_writev, pid_t, pid, const struct kernel_iovec *, local_iov, unsigned long, local_iov_count, const struct kernel_iovec *, remote_iov, unsigned long, remote_iov_count, unsigned long, flags)
+LSS_INLINE _syscall3(ssize_t, readv, int, fd, const struct kernel_iovec *, vec, unsigned long, vlen)
+LSS_INLINE _syscall5(int, renameat2, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, unsigned, flags)
+LSS_INLINE _syscall3(int, seccomp, int, op, int, flags, void *, args)
+LSS_INLINE _syscall3(int, symlinkat, const char *, old_name, int, new_dirfd, const char *, new_name)
+LSS_INLINE _syscall1(int, uname, struct kernel_utsname *, buf)
+
+LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *const *envp) {
+  return LSS_NAME(execveat)(fd, "", argv, envp, AT_EMPTY_PATH);
+}
+
+#ifdef __NR_access
+LSS_INLINE _syscall2(int, access, const char *, pathname, int, mode)
+#else
+LSS_INLINE int LSS_NAME(access)(const char *pathname, int mode) {
+  return LSS_NAME(faccessat)(AT_FDCWD, pathname, mode, 0);
+}
+#endif
+
+#ifdef __i386__
+LSS_INLINE _syscall2(int, arch_prctl, int, op, void *, addr)
+#endif
+
+#ifdef __NR_creat
+LSS_INLINE _syscall2(int, creat, const char *, pathname, mode_t, mode)
+#else
+LSS_INLINE int LSS_NAME(creat)(const char *pathname, mode_t mode) {
+  return LSS_NAME(open)(pathname, O_CREAT | O_TRUNC | O_WRONLY, mode);
+}
+#endif
+
+#ifdef __NR_link
+LSS_INLINE _syscall2(int, link, const char *, old_name, const char *, new_name)
+#else
+LSS_INLINE int LSS_NAME(link)(const char *old_name, const char *new_name) {
+  return LSS_NAME(linkat)(AT_FDCWD, old_name, AT_FDCWD, new_name, 0);
+}
+#endif
+
+#ifdef __NR_mkdir
+LSS_INLINE _syscall2(int, mkdir, const char *, name, mode_t, mode)
+#else
+LSS_INLINE int LSS_NAME(mkdir)(const char *name, mode_t mode) {
+  return LSS_NAME(mkdirat)(AT_FDCWD, name, mode);
+}
+#endif
+
+#ifdef __NR_renameat
+LSS_INLINE _syscall4(int, renameat, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name)
+#else
+LSS_INLINE int LSS_NAME(renameat)(int old_dirfd, const char *old_name, int new_dirfd, const char *new_name) {
+  return LSS_NAME(renameat2)(old_dirfd, old_name, new_dirfd, new_name, 0);
+}
+#endif
+
+#ifdef __NR_rename
+LSS_INLINE _syscall2(int, rename, const char *, old_name, const char *, new_name)
+#else
+LSS_INLINE int LSS_NAME(rename)(const char *old_name, const char *new_name) {
+  return LSS_NAME(renameat)(AT_FDCWD, old_name, AT_FDCWD, new_name);
+}
+#endif
+
+#ifdef __NR_rmdir
+LSS_INLINE _syscall1(int, rmdir, const char *, pathname)
+#else
+LSS_INLINE int LSS_NAME(rmdir)(const char* pathname) {
+  return LSS_NAME(unlinkat)(AT_FDCWD, pathname, AT_REMOVEDIR);
+}
+#endif
+
+#ifdef __LP64__
+LSS_INLINE _syscall4(int, sendfile, int, out_fd, int, in_fd, loff_t *, offset, size_t, count)
+LSS_INLINE int LSS_NAME(sendfile64)(int out_fd, int in_fd, loff_t *offset, size_t count) {
+  return LSS_NAME(sendfile)(out_fd, in_fd, offset, count);
+}
+#else
+LSS_INLINE _syscall4(int, sendfile, int, out_fd, int, in_fd, off_t *, offset, size_t, count)
+LSS_INLINE _syscall4(int, sendfile64, int, out_fd, int, in_fd, loff_t *, offset, size_t, count)
+#endif
+
+#ifdef __NR_symlink
+LSS_INLINE _syscall2(int, symlink, const char *, old_name, const char *, new_name)
+#else
+LSS_INLINE int LSS_NAME(symlink)(const char *old_name, const char *new_name) {
+  return LSS_NAME(symlinkat)(old_name, AT_FDCWD, new_name);
+}
+#endif
+
+#ifdef __cplusplus
+inline namespace helpers {
+
+LSS_INLINE int LSS_NAME(open)(const char *pathname, int flags) {
+  return ::lss::LSS_NAME(open)(pathname, flags, 0);
+}
+
+LSS_INLINE int LSS_NAME(openat)(int dirfd, const char *pathname, int flags) {
+  return ::lss::LSS_NAME(openat)(dirfd, pathname, flags, 0);
+}
+
+template <typename... Args>
+LSS_INLINE long LSS_NAME(prctl)(int option, Args&&... args) {
+  static_assert(sizeof...(args) == 4);
+  return ::lss::LSS_NAME(prctl)(option, (unsigned long)static_cast<Args&&>(args)...);
+}
+
+}
+#endif
+
 /* These restore the original values of these macros saved by the
  * corresponding #pragma push_macro near the top of this file. */
 #pragma pop_macro("stat64")
@@ -5367,9 +5683,8 @@ struct kernel_statx {
 #pragma pop_macro("pwrite64")
 #pragma pop_macro("getdents64")
 
-#if defined(__cplusplus) && !defined(SYS_CPLUSPLUS)
+#if defined(__cplusplus)
 }
 #endif
 
-#endif
 #endif
