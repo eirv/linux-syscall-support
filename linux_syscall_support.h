@@ -4632,16 +4632,24 @@ struct kernel_utsname {
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-#else
-      if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) == -ENOSYS) {
-#endif
         if ((rgid == NULL) || (egid == NULL) || (sgid == NULL)) {
-          return EFAULT;
+          LSS_ERRNO = EFAULT;
+          return -1;
         }
         // Clear the high bits first, since getresgid only sets 16 bits
         *rgid = *egid = *sgid = 0;
         rc = LSS_NAME(getresgid)(rgid, egid, sgid);
       }
+#else
+      if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) == -ENOSYS) {
+        if ((rgid == NULL) || (egid == NULL) || (sgid == NULL)) {
+          return -EFAULT;
+        }
+        // Clear the high bits first, since getresgid only sets 16 bits
+        *rgid = *egid = *sgid = 0;
+        rc = LSS_NAME(getresgid)(rgid, egid, sgid);
+      }
+#endif
       return rc;
     }
 
@@ -4652,16 +4660,24 @@ struct kernel_utsname {
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-#else
-      if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) == -ENOSYS) {
-#endif
         if ((ruid == NULL) || (euid == NULL) || (suid == NULL)) {
-          return EFAULT;
+          LSS_ERRNO = EFAULT;
+          return -1;
         }
         // Clear the high bits first, since getresuid only sets 16 bits
         *ruid = *euid = *suid = 0;
         rc = LSS_NAME(getresuid)(ruid, euid, suid);
       }
+#else
+      if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) == -ENOSYS) {
+        if ((ruid == NULL) || (euid == NULL) || (suid == NULL)) {
+          return -EFAULT;
+        }
+        // Clear the high bits first, since getresuid only sets 16 bits
+        *ruid = *euid = *suid = 0;
+        rc = LSS_NAME(getresuid)(ruid, euid, suid);
+      }
+#endif
       return rc;
     }
 
@@ -4670,15 +4686,22 @@ struct kernel_utsname {
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setfsgid32)(gid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-#else
-      if ((rc = LSS_NAME(_setfsgid32)(gid)) == -ENOSYS) {
-#endif
         if ((unsigned int)gid & ~0xFFFFu) {
-          rc = EINVAL;
+          LSS_ERRNO = EINVAL;
+          rc = -1;
         } else {
           rc = LSS_NAME(setfsgid)(gid);
         }
       }
+#else
+      if ((rc = LSS_NAME(_setfsgid32)(gid)) == -ENOSYS) {
+        if ((unsigned int)gid & ~0xFFFFu) {
+          rc = -EINVAL;
+        } else {
+          rc = LSS_NAME(setfsgid)(gid);
+        }
+      }
+#endif
       return rc;
     }
 
@@ -4687,15 +4710,22 @@ struct kernel_utsname {
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setfsuid32)(uid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-#else
-      if ((rc = LSS_NAME(_setfsuid32)(uid))  == -ENOSYS) {
-#endif
         if ((unsigned int)uid & ~0xFFFFu) {
-          rc = EINVAL;
+          LSS_ERRNO = EINVAL;
+          rc = -1;
         } else {
           rc = LSS_NAME(setfsuid)(uid);
         }
       }
+#else
+      if ((rc = LSS_NAME(_setfsuid32)(uid))  == -ENOSYS) {
+        if ((unsigned int)uid & ~0xFFFFu) {
+          rc = -EINVAL;
+        } else {
+          rc = LSS_NAME(setfsuid)(uid);
+        }
+      }
+#endif
       return rc;
     }
 
@@ -4704,17 +4734,26 @@ struct kernel_utsname {
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-#else
-      if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid))  == -ENOSYS) {
-#endif
         if ((unsigned int)rgid & ~0xFFFFu ||
             (unsigned int)egid & ~0xFFFFu ||
             (unsigned int)sgid & ~0xFFFFu) {
-          rc = EINVAL;
+          LSS_ERRNO = EINVAL;
+          rc = -1;
         } else {
           rc = LSS_NAME(setresgid)(rgid, egid, sgid);
         }
       }
+#else
+      if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid))  == -ENOSYS) {
+        if ((unsigned int)rgid & ~0xFFFFu ||
+            (unsigned int)egid & ~0xFFFFu ||
+            (unsigned int)sgid & ~0xFFFFu) {
+          rc = -EINVAL;
+        } else {
+          rc = LSS_NAME(setresgid)(rgid, egid, sgid);
+        }
+      }
+#endif
       return rc;
     }
 
@@ -4723,17 +4762,26 @@ struct kernel_utsname {
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-#else
-      if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid))  == -ENOSYS) {
-#endif
         if ((unsigned int)ruid & ~0xFFFFu ||
             (unsigned int)euid & ~0xFFFFu ||
             (unsigned int)suid & ~0xFFFFu) {
-          rc = EINVAL;
+          LSS_ERRNO = EINVAL;
+          rc = -1;
         } else {
           rc = LSS_NAME(setresuid)(ruid, euid, suid);
         }
       }
+#else
+      if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid))  == -ENOSYS) {
+        if ((unsigned int)ruid & ~0xFFFFu ||
+            (unsigned int)euid & ~0xFFFFu ||
+            (unsigned int)suid & ~0xFFFFu) {
+          rc = -EINVAL;
+        } else {
+          rc = LSS_NAME(setresuid)(ruid, euid, suid);
+        }
+      }
+#endif
       return rc;
     }
   #endif
@@ -4914,13 +4962,16 @@ struct kernel_utsname {
       int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
       if (rc < 0 && LSS_ERRNO == ENOSYS) {
         LSS_ERRNO = old_errno;
-#else
-      int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
-      if (rc == -ENOSYS) {
-#endif
         LSS_NAME(sigemptyset)(set);
         rc = LSS_NAME(_sigpending)(&set->sig[0]);
       }
+#else
+      int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
+      if (rc == -ENOSYS) {
+        LSS_NAME(sigemptyset)(set);
+        rc = LSS_NAME(_sigpending)(&set->sig[0]);
+      }
+#endif
       return rc;
     }
 
@@ -4930,16 +4981,22 @@ struct kernel_utsname {
       int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
       if (rc < 0 && LSS_ERRNO == ENOSYS) {
         LSS_ERRNO = olderrno;
-#else
-      int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
-      if (rc == -ENOSYS) {
-#endif
         rc = LSS_NAME(_sigsuspend)(
         #ifndef __PPC__
                                    set, 0,
         #endif
                                    set->sig[0]);
       }
+#else
+      int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
+      if (rc == -ENOSYS) {
+        rc = LSS_NAME(_sigsuspend)(
+        #ifndef __PPC__
+                                   set, 0,
+        #endif
+                                   set->sig[0]);
+      }
+#endif
       return rc;
     }
   #endif
@@ -4970,7 +5027,7 @@ struct kernel_utsname {
         LSS_ERRNO = EINVAL;
         return (void *) -1;
 #else
-        return (void*)-EINVAL;
+        return (void *) -EINVAL;
 #endif
       }
       return LSS_NAME(_mmap2)(s, l, p, f, d, (o / 4096));
@@ -5214,7 +5271,7 @@ struct kernel_utsname {
 
   LSS_INLINE pid_t LSS_NAME(gettid)(void) {
     pid_t tid = LSS_NAME(_gettid)();
-    if (tid != -1) {
+    if (tid >= 0) {
       return tid;
     }
     return LSS_NAME(getpid)();
