@@ -3027,6 +3027,36 @@ struct kernel_utsname {
      * at optimizing across __asm__ calls.
      * So, we just have to redefine all of the _syscallX() macros.
      */
+    #undef LSS_ENTRYPOINT
+    #undef LSS_SYSCALL_CLOBBERS
+    #ifdef SYS_SYSCALL_ENTRYPOINT
+    static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+      void (**entrypoint)(void);
+      asm volatile(".bss\n"
+                   ".align 8\n"
+                   ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"
+                   ".previous\n"
+                   "adr %0, " SYS_SYSCALL_ENTRYPOINT "\n"
+                   : "=r"(entrypoint));
+      return entrypoint;
+    }
+
+    #define LSS_ENTRYPOINT                                                    \
+              "adrp lr, " SYS_SYSCALL_ENTRYPOINT "\n"                         \
+              "ldr lr, [lr, :lo12:" SYS_SYSCALL_ENTRYPOINT "]\n"              \
+              "cbz lr, 10001f\n"                                              \
+              "blr lr\n"                                                      \
+              "b 10002f\n"                                                    \
+        "10001:svc #0\n"                                                      \
+        "10002:\n"
+    #define LSS_SYSCALL_CLOBBERS "lr", "memory"
+
+    #else
+    #define LSS_ENTRYPOINT "svc #0\n"
+    #define LSS_SYSCALL_CLOBBERS "memory"
+    #endif
+
     #undef LSS_REG
     #define LSS_REG(r,a) register int64_t __r##r __asm__("x"#r) = (int64_t)a
     #undef  LSS_BODY
@@ -3034,10 +3064,10 @@ struct kernel_utsname {
           register int64_t __res_x0 __asm__("x0");                            \
           register int32_t __w8 __asm__("w8") = __NR_##name;                  \
           int64_t __res;                                                      \
-          __asm__ __volatile__ ("svc 0x0\n"                                   \
+          __asm__ __volatile__ (LSS_ENTRYPOINT                                \
                                 : "=r"(__res_x0)                              \
                                 : "r"(__w8) , ## args                         \
-                                : "memory");                                  \
+                                : LSS_SYSCALL_CLOBBERS);                      \
           __res = __res_x0;                                                   \
           LSS_RETURN(type, __res)
     #undef _syscall0
@@ -3112,7 +3142,7 @@ struct kernel_utsname {
                               *               %x4 = child_tidptr)
                               */
                              "mov     w8, %8\n"
-                             "svc     0x0\n"
+                             LSS_ENTRYPOINT
 
                              /* if (%r0 != 0)
                               *   return %r0;
@@ -3128,13 +3158,13 @@ struct kernel_utsname {
                              /* Call _exit(%r0).
                               */
                              "mov     w8, %9\n"
-                             "svc     0x0\n"
+                             LSS_ENTRYPOINT
                            "1:\n"
                              : "=r" (__res)
                              : "r"(fn), "r"(__stack), "r"(__flags), "r"(arg),
                                "r"(__ptid), "r"(__tls), "r"(__ctid),
                                "i"(__NR_clone), "i"(__NR_exit)
-                             : "cc", "x8", "memory");
+                             : "cc", "x8", LSS_SYSCALL_CLOBBERS);
       }
       LSS_RETURN(int, __res);
     }
@@ -3159,11 +3189,12 @@ struct kernel_utsname {
                            * modify the next two instructions.
                            */
                           "mov     w8, %1\n"
-                          "svc     0x0\n"
+                          LSS_ENTRYPOINT
                         "2:\n"
                           "adr     %0, 1b\n"
                            : "=r" (res)
-                           : "i"  (__NR_rt_sigreturn));
+                           : "i"  (__NR_rt_sigreturn)
+                           : LSS_SYSCALL_CLOBBERS);
       return (void (*)(void))(uintptr_t)res;
     }
   #elif defined(__mips__)
