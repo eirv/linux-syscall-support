@@ -2854,7 +2854,7 @@ struct kernel_utsname {
      */
     #undef LSS_ENTRYPOINT
     #undef LSS_SYSCALL_CLOBBERS
-    #if defined(SYS_SYSCALL_ENTRYPOINT) //&& defined(__thumb__)  // TODO: Support arm mode
+    #if defined(SYS_SYSCALL_ENTRYPOINT) && defined(__thumb__)  // TODO: Support arm mode
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
       void (**entrypoint)(void);
       asm volatile(".bss\n"
