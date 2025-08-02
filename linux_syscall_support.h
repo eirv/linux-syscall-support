@@ -3775,6 +3775,35 @@ struct kernel_utsname {
       LSS_RETURN(int, __ret);
     }
   #elif defined(__riscv) && __riscv_xlen == 64
+    #undef LSS_ENTRYPOINT
+    #undef LSS_SYSCALL_CLOBBERS
+    #ifdef SYS_SYSCALL_ENTRYPOINT
+    static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+      void (**entrypoint)(void);
+      asm volatile(".bss\n"
+                   ".align 8\n"
+                   ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"
+                   ".previous\n"
+                   "lla %0, " SYS_SYSCALL_ENTRYPOINT "\n"
+                   : "=r"(entrypoint));
+      return entrypoint;
+    }
+
+    #define LSS_ENTRYPOINT                                                    \
+              "ld ra, " SYS_SYSCALL_ENTRYPOINT "\n"                           \
+              "beqz ra, 10001f\n"                                             \
+              "jalr ra\n"                                                     \
+              "j 10002f\n"                                                    \
+        "10001:ecall\n"                                                       \
+        "10002:\n"
+    #define LSS_SYSCALL_CLOBBERS "ra", "memory"
+
+    #else
+    #define LSS_ENTRYPOINT "ecall\n"
+    #define LSS_SYSCALL_CLOBBERS "memory"
+    #endif
+
     #undef LSS_REG
     #define LSS_REG(r,a) register int64_t __r##r __asm__("a"#r) = (int64_t)a
     #undef  LSS_BODY
@@ -3782,10 +3811,10 @@ struct kernel_utsname {
           register int64_t __res_a0 __asm__("a0");                            \
           register int64_t __a7 __asm__("a7") = __NR_##name;                  \
           int64_t __res;                                                      \
-          __asm__ __volatile__ ("scall\n"                                     \
+          __asm__ __volatile__ (LSS_ENTRYPOINT                                \
                                 : "=r"(__res_a0)                              \
                                 : "r"(__a7) , ## args                         \
-                                : "memory");                                  \
+                                : LSS_SYSCALL_CLOBBERS);                      \
           __res = __res_a0;                                                   \
           LSS_RETURN(type, __res)
     #undef _syscall0
@@ -3863,7 +3892,7 @@ struct kernel_utsname {
                               *               %a4 = child_tidptr)
                               */
                              "li      a7, %8\n"
-                             "scall\n"
+                             LSS_ENTRYPOINT
 
                              /* if (%a0 != 0)
                               *   return %a0;
@@ -3879,13 +3908,13 @@ struct kernel_utsname {
                              /* Call _exit(%a0).
                               */
                              "li      a7, %9\n"
-                             "scall\n"
+                             LSS_ENTRYPOINT
                            "1:\n"
                              : "=r" (__res_a0)
                              : "r"(fn), "r"(__stack), "r"(__flags), "r"(arg),
                                "r"(__ptid), "r"(__tls), "r"(__ctid),
                                "i"(__NR_clone), "i"(__NR_exit)
-                             : "cc", "memory");
+                             : "cc", LSS_SYSCALL_CLOBBERS);
         __res = __res_a0;
       }
       LSS_RETURN(int, __res);
