@@ -2184,14 +2184,15 @@ struct kernel_utsname {
   #endif
   #endif
 
-  #if defined(SYS_SYSCALL_ENTRYPOINT)
-    #undef LSS_ENTRYPOINT_DEF
-    #define LSS_ENTRYPOINT_DEF(s) ".bss\n"                                    \
-                                  ".align " #s "\n"                           \
-                                  ".globl " SYS_SYSCALL_ENTRYPOINT "\n"       \
-                                  ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"      \
-                                  ".common " SYS_SYSCALL_ENTRYPOINT "," #s "," #s "\n" \
-                                  ".previous\n"
+  #ifdef SYS_SYSCALL_ENTRYPOINT
+    #undef LSS_SYSCALL_ENTRYPOINT_DEF
+    #define LSS_SYSCALL_ENTRYPOINT_DEF(s)                                     \
+        ".bss\n"                                                              \
+        ".align " #s "\n"                                                     \
+        ".globl " SYS_SYSCALL_ENTRYPOINT "\n"                                 \
+        ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"                                \
+        ".common " SYS_SYSCALL_ENTRYPOINT "," #s "," #s "\n"                  \
+        ".previous\n"
   #endif
 
   #if defined(__i386__)
@@ -2207,7 +2208,7 @@ struct kernel_utsname {
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
       void (**entrypoint)(void);
-      asm volatile(LSS_ENTRYPOINT_DEF(4)
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(4)
                    /* This logically does 'lea "SYS_SYSCALL_ENTRYPOINT", %0' */
                    "call 0f\n"
                  "0:pop  %0\n"
@@ -2217,7 +2218,7 @@ struct kernel_utsname {
       return entrypoint;
     }
 
-    #define LSS_ENTRYPOINT LSS_ENTRYPOINT_DEF(4)                              \
+    #define LSS_ENTRYPOINT LSS_SYSCALL_ENTRYPOINT_DEF(4)                      \
                            /* Check the SYS_SYSCALL_ENTRYPOINT vector      */ \
                            "push %%eax\n"                                     \
                            "call 10000f\n"                                    \
@@ -2468,14 +2469,14 @@ struct kernel_utsname {
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
       void (**entrypoint)(void);
-      asm volatile(LSS_ENTRYPOINT_DEF(8)
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8)
                    "mov " SYS_SYSCALL_ENTRYPOINT "@GOTPCREL(%%rip), %0\n"
                    : "=r"(entrypoint));
       return entrypoint;
     }
 
     #define LSS_ENTRYPOINT                                                    \
-              LSS_ENTRYPOINT_DEF(8)                                           \
+              LSS_SYSCALL_ENTRYPOINT_DEF(8)                                   \
               "mov " SYS_SYSCALL_ENTRYPOINT "@GOTPCREL(%%rip), %%rcx\n"       \
               "mov  0(%%rcx), %%rcx\n"                                        \
               "test %%rcx, %%rcx\n"                                           \
@@ -2852,7 +2853,7 @@ struct kernel_utsname {
     #if defined(SYS_SYSCALL_ENTRYPOINT) && defined(__thumb__)  // TODO: Support arm mode
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
       void (**entrypoint)(void);
-      asm volatile(LSS_ENTRYPOINT_DEF(4)
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(4)
                    "ldr %0, 1f\n"
                  "0:add %0, pc, %0\n"
                    "b 2f\n"
@@ -2863,7 +2864,7 @@ struct kernel_utsname {
     }
 
     #define LSS_ENTRYPOINT                                                    \
-              LSS_ENTRYPOINT_DEF(4)                                           \
+              LSS_SYSCALL_ENTRYPOINT_DEF(4)                                   \
               "ldr lr, 10002f\n"                                              \
         "10001:add lr, pc, lr\n"                                              \
               "ldr lr, [lr]\n"                                                \
@@ -3061,14 +3062,14 @@ struct kernel_utsname {
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
       void (**entrypoint)(void);
-      asm volatile(LSS_ENTRYPOINT_DEF(8)
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8)
                    "adr %0, " SYS_SYSCALL_ENTRYPOINT "\n"
                    : "=r"(entrypoint));
       return entrypoint;
     }
 
     #define LSS_ENTRYPOINT                                                    \
-              LSS_ENTRYPOINT_DEF(8)                                           \
+              LSS_SYSCALL_ENTRYPOINT_DEF(8)                                   \
               "adrp lr, " SYS_SYSCALL_ENTRYPOINT "\n"                         \
               "ldr lr, [lr, :lo12:" SYS_SYSCALL_ENTRYPOINT "]\n"              \
               "cbz lr, 10001f\n"                                              \
@@ -3769,14 +3770,14 @@ struct kernel_utsname {
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
       void (**entrypoint)(void);
-      asm volatile(LSS_ENTRYPOINT_DEF(8)
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8)
                    "lla %0, " SYS_SYSCALL_ENTRYPOINT "\n"
                    : "=r"(entrypoint));
       return entrypoint;
     }
 
     #define LSS_ENTRYPOINT                                                    \
-              LSS_ENTRYPOINT_DEF(8)                                           \
+              LSS_SYSCALL_ENTRYPOINT_DEF(8)                                   \
               "ld ra, " SYS_SYSCALL_ENTRYPOINT "\n"                           \
               "beqz ra, 10001f\n"                                             \
               "jalr ra\n"                                                     \
