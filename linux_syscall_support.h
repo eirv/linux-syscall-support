@@ -2080,39 +2080,38 @@ struct kernel_utsname {
    */
   #undef LSS_NAME
   #undef LSS_NAME_COMPAT
+  #undef _LSS_NAME
   #ifndef SYS_PREFIX
-    #ifdef SYS_ERRNO
-      #define LSS_NAME(name) sys_##name
-    #else
-      #define LSS_NAME(name) raw_##name
-      #define LSS_NAME_COMPAT(name) rawc_##name
-    #endif
-  #elif defined(SYS_PREFIX) && SYS_PREFIX < 0
-    #define LSS_NAME(name) name
-    #define LSS_NAME_COMPAT(name) name
+    #define _LSS_NAME(prefix, name) prefix##_##name
+  #elif defined(SYS_PREFIX) && (SYS_PREFIX < 0 || SYS_PREFIX > 9)
+    #define _LSS_NAME(prefix, name) name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 0
-    #define LSS_NAME(name) sys0_##name
+    #define _LSS_NAME(prefix, name) prefix##0_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 1
-    #define LSS_NAME(name) sys1_##name
+    #define _LSS_NAME(prefix, name) prefix##1_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 2
-    #define LSS_NAME(name) sys2_##name
+    #define _LSS_NAME(prefix, name) prefix##2_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 3
-    #define LSS_NAME(name) sys3_##name
+    #define _LSS_NAME(prefix, name) prefix##3_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 4
-    #define LSS_NAME(name) sys4_##name
+    #define _LSS_NAME(prefix, name) prefix##4_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 5
-    #define LSS_NAME(name) sys5_##name
+    #define _LSS_NAME(prefix, name) prefix##5_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 6
-    #define LSS_NAME(name) sys6_##name
+    #define _LSS_NAME(prefix, name) prefix##6_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 7
-    #define LSS_NAME(name) sys7_##name
+    #define _LSS_NAME(prefix, name) prefix##7_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 8
-    #define LSS_NAME(name) sys8_##name
+    #define _LSS_NAME(prefix, name) prefix##8_##name
   #elif defined(SYS_PREFIX) && SYS_PREFIX == 9
-    #define LSS_NAME(name) sys9_##name
+    #define _LSS_NAME(prefix, name) prefix##9_##name
   #endif
-  #ifndef LSS_NAME_COMPAT
-    #define LSS_NAME_COMPAT(name) sysc_##name
+  #ifdef SYS_ERRNO
+    #define LSS_NAME(name) _LSS_NAME(sys, name)
+    #define LSS_NAME_COMPAT(name) _LSS_NAME(sysc, name)
+  #else
+    #define LSS_NAME(name) _LSS_NAME(raw, name)
+    #define LSS_NAME_COMPAT(name) _LSS_NAME(rawc, name)
   #endif
 
   #undef  LSS_RETURN
