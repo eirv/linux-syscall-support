@@ -2199,6 +2199,7 @@ struct kernel_utsname {
       asm volatile(".bss\n"
                    ".align 8\n"
                    ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"
                    ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"
                    ".previous\n"
                    /* This logically does 'lea "SYS_SYSCALL_ENTRYPOINT", %0' */
@@ -2213,6 +2214,7 @@ struct kernel_utsname {
     #define LSS_ENTRYPOINT ".bss\n"                                           \
                            ".align 8\n"                                       \
                            ".globl " SYS_SYSCALL_ENTRYPOINT "\n"              \
+                           ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"             \
                            ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"         \
                            ".previous\n"                                      \
                            /* Check the SYS_SYSCALL_ENTRYPOINT vector      */ \
@@ -2468,6 +2470,7 @@ struct kernel_utsname {
       asm volatile(".bss\n"
                    ".align 8\n"
                    ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"
                    ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"
                    ".previous\n"
                    "mov " SYS_SYSCALL_ENTRYPOINT "@GOTPCREL(%%rip), %0\n"
@@ -2479,6 +2482,7 @@ struct kernel_utsname {
               ".bss\n"                                                        \
               ".align 8\n"                                                    \
               ".globl " SYS_SYSCALL_ENTRYPOINT "\n"                           \
+              ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"                          \
               ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"                      \
               ".previous\n"                                                   \
               "mov " SYS_SYSCALL_ENTRYPOINT "@GOTPCREL(%%rip), %%rcx\n"       \
@@ -2860,6 +2864,7 @@ struct kernel_utsname {
       asm volatile(".bss\n"
                    ".align 4\n"
                    ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"
                    ".common " SYS_SYSCALL_ENTRYPOINT ",4,4\n"
                    ".previous\n"
                    "ldr %0, 1f\n"
@@ -3072,6 +3077,7 @@ struct kernel_utsname {
       asm volatile(".bss\n"
                    ".align 8\n"
                    ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"
                    ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"
                    ".previous\n"
                    "adr %0, " SYS_SYSCALL_ENTRYPOINT "\n"
@@ -3783,6 +3789,7 @@ struct kernel_utsname {
       asm volatile(".bss\n"
                    ".align 8\n"
                    ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".hidden " SYS_SYSCALL_ENTRYPOINT "\n"
                    ".common " SYS_SYSCALL_ENTRYPOINT ",8,8\n"
                    ".previous\n"
                    "lla %0, " SYS_SYSCALL_ENTRYPOINT "\n"
