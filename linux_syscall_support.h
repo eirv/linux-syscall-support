@@ -5714,6 +5714,7 @@ LSS_INLINE int LSS_NAME_COMPAT(fstatat)(int dirfd, const char *pathname, struct 
   return LSS_LP_SELECT(LSS_NAME(newfstatat), LSS_NAME(fstatat64))(dirfd, pathname, buf, flags);
 }
 
+LSS_INLINE _syscall6(int, copy_file_range, int, fd_in, loff_t *, off_in, int, fd_out, loff_t *, off_out, size_t, size, unsigned int, flags)
 LSS_INLINE _syscall5(int, execveat, int, dirfd, const char *, pathname, const char *const *, argv, const char *const *, envp, int, flags)
 LSS_INLINE _syscall1(int, fchdir, int, fd)
 LSS_INLINE _syscall2(int, fchmod, int, fd, mode_t, mode)
@@ -5722,6 +5723,9 @@ LSS_INLINE _syscall4(int, faccessat, int, dirfd, const char *, pathname, int, mo
 LSS_INLINE _syscall2(int, getcwd, char *, buf, size_t, size)
 LSS_INLINE _syscall0(gid_t, getgid)
 LSS_INLINE _syscall0(uid_t, getuid)
+LSS_INLINE _syscall1(int, inotify_init1, int, flags)
+LSS_INLINE _syscall3(int, inotify_add_watch, int, fd, const char *, pathname, unsigned int, mask)
+LSS_INLINE _syscall2(int, inotify_rm_watch, int, fd, int, wd)
 LSS_INLINE _syscall5(int, linkat, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, int, flags)
 LSS_INLINE _syscall2(int, memfd_create, const char *, name, unsigned int, flags)
 LSS_INLINE _syscall3(int, mkdirat, int, dirfd, const char *, name, mode_t, mode)
@@ -5740,6 +5744,7 @@ LSS_INLINE _syscall3(ssize_t, readv, int, fd, const struct kernel_iovec *, vec, 
 LSS_INLINE _syscall5(int, renameat2, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, unsigned, flags)
 LSS_INLINE _syscall3(int, seccomp, int, op, int, flags, void *, args)
 LSS_INLINE _syscall3(int, symlinkat, const char *, old_name, int, new_dirfd, const char *, new_name)
+LSS_INLINE _syscall4(ssize_t, tee, int, fd_in, int, fd_out, size_t, size, unsigned int, flags)
 LSS_INLINE _syscall1(int, uname, struct kernel_utsname *, buf)
 
 LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *const *envp) {
@@ -5747,7 +5752,15 @@ LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *co
 }
 
 #ifdef __i386__
+#ifndef __NR__sync_file_range
+#define __NR__sync_file_range __NR_sync_file_range
+#endif
 LSS_INLINE _syscall2(int, arch_prctl, int, op, void *, addr)
+LSS_INLINE _syscall6(int, _sync_file_range, int, fd, unsigned, offset_lo, unsigned, offset_hi, unsigned, length_lo, unsigned, length_hi, unsigned int, flags)
+LSS_INLINE int LSS_NAME(sync_file_range)(int fd, loff_t offset, loff_t length, unsigned int flags) {
+  union { loff_t off; unsigned w[2]; } o = { offset }, l = { length };
+  return LSS_NAME(_sync_file_range)(fd, o.w[0], o.w[1], l.w[0], l.w[1], flags);
+}
 #elif defined(__ARM_ARCH_3__) || defined(__ARM_EABI__)
 #ifndef __NR_arm_breakpoint
 #define __NR_arm_breakpoint 0xf0001
@@ -5761,10 +5774,20 @@ LSS_INLINE _syscall2(int, arch_prctl, int, op, void *, addr)
 #ifndef __NR_arm_get_tls
 #define __NR_arm_get_tls 0xf0006
 #endif
+LSS_INLINE _syscall6(int, arm_sync_file_range, int, fd, unsigned int, flags, unsigned, offset_lo, unsigned, offset_hi, unsigned, length_lo, unsigned, length_hi)
 LSS_INLINE _syscall0(int, arm_breakpoint)
 LSS_INLINE _syscall3(int, arm_cacheflush, void *, start, void *, end, int, flags)
 LSS_INLINE _syscall1(int, arm_set_tls, void *, tls)
 LSS_INLINE _syscall0(void *, arm_get_tls)
+LSS_INLINE int LSS_NAME(sync_file_range)(int fd, loff_t offset, loff_t length, unsigned int flags) {
+  union { loff_t off; unsigned w[2]; } o = { offset }, l = { length };
+  return LSS_NAME(arm_sync_file_range)(fd, flags, o.w[0], o.w[1], l.w[0], l.w[1]);
+}
+#elif defined(__riscv)
+#ifndef __NR_riscv_flush_icache
+#define __NR_riscv_flush_icache 259
+#endif
+LSS_INLINE _syscall3(int, riscv_flush_icache, void *, start, void *, end, unsigned long, flags)
 #endif
 
 #ifdef __NR_access
@@ -5780,6 +5803,14 @@ LSS_INLINE _syscall2(int, creat, const char *, pathname, mode_t, mode)
 #else
 LSS_INLINE int LSS_NAME(creat)(const char *pathname, mode_t mode) {
   return LSS_NAME(open)(pathname, O_CREAT | O_TRUNC | O_WRONLY, mode);
+}
+#endif
+
+#ifdef __NR_inotify_init
+LSS_INLINE _syscall0(int, inotify_init)
+#else
+LSS_INLINE int LSS_NAME(inotify_init)() {
+  return LSS_NAME(inotify_init1)(0);
 }
 #endif
 
@@ -5825,6 +5856,7 @@ LSS_INLINE int LSS_NAME(rmdir)(const char* pathname) {
 
 #ifdef __LP64__
 LSS_INLINE _syscall4(int, sendfile, int, out_fd, int, in_fd, loff_t *, offset, size_t, count)
+LSS_INLINE _syscall4(int, sync_file_range, int, fd, loff_t, offset, loff_t, length, unsigned int, flags)
 LSS_INLINE int LSS_NAME(sendfile64)(int out_fd, int in_fd, loff_t *offset, size_t count) {
   return LSS_NAME(sendfile)(out_fd, in_fd, offset, count);
 }
