@@ -131,8 +131,10 @@
 #endif
 #endif
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winline-asm"
+#endif
 
 #ifdef __cplusplus
 inline namespace lss {
@@ -5891,6 +5893,8 @@ LSS_INLINE long LSS_NAME(prctl)(int option, Args&&... args) {
 }
 #endif
 
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 
 #endif
