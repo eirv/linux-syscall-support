@@ -2852,6 +2852,43 @@ struct kernel_utsname {
      * at optimizing across __asm__ calls.
      * So, we just have to redefine all fo the _syscallX() macros.
      */
+    #undef LSS_ENTRYPOINT
+    #undef LSS_SYSCALL_CLOBBERS
+    #if defined(SYS_SYSCALL_ENTRYPOINT) //&& defined(__thumb__)  // TODO: Support arm mode
+    static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+      void (**entrypoint)(void);
+      asm volatile(".bss\n"
+                   ".align 4\n"
+                   ".globl " SYS_SYSCALL_ENTRYPOINT "\n"
+                   ".common " SYS_SYSCALL_ENTRYPOINT ",4,4\n"
+                   ".previous\n"
+                   "ldr %0, 1f\n"
+                 "0:add %0, pc, %0\n"
+                   "b 2f\n"
+                 "1:.long " SYS_SYSCALL_ENTRYPOINT "-0b-4\n"
+                 "2:\n"
+                   : "=r"(entrypoint));
+      return entrypoint;
+    }
+
+    #define LSS_ENTRYPOINT                                                    \
+              "ldr lr, 10002f\n"                                              \
+        "10001:add lr, pc, lr\n"                                              \
+              "ldr lr, [lr]\n"                                                \
+              "cmp lr, #0\n"                                                  \
+              "beq 10003f\n"                                                  \
+              "blx lr\n"                                                      \
+              "b 10004f\n"                                                    \
+        "10002:.long " SYS_SYSCALL_ENTRYPOINT "-10001b-4\n"                   \
+        "10003:swi #0\n"                                                      \
+        "10004:\n"
+    #define LSS_SYSCALL_CLOBBERS "lr", "cc", "memory"
+
+    #else
+    #define LSS_ENTRYPOINT "swi #0\n"
+    #define LSS_SYSCALL_CLOBBERS "memory"
+    #endif
+
     #undef LSS_REG
     #define LSS_REG(r,a) register long __r##r __asm__("r"#r) = (long)a
     #undef  LSS_BODY
@@ -2869,19 +2906,19 @@ struct kernel_utsname {
               __asm__ __volatile__ ("push {r7}\n"                             \
                                     "mov r7, #0xf0000\n"                      \
                                     "add r7, r7, %1\n"                        \
-                                    "swi 0x0\n"                               \
+                                    LSS_ENTRYPOINT                            \
                                     "pop {r7}\n"                              \
                                     : "=r"(__res_r0)                          \
                                     : "i"(__NR_##name - 0xf0000) , ## args    \
-                                    : "lr", "memory");                        \
+                                    : "lr", LSS_SYSCALL_CLOBBERS);            \
             else                                                              \
               __asm__ __volatile__ ("push {r7}\n"                             \
                                     "mov r7, %1\n"                            \
-                                    "swi 0x0\n"                               \
+                                    LSS_ENTRYPOINT                            \
                                     "pop {r7}\n"                              \
                                     : "=r"(__res_r0)                          \
                                     : "i"(__NR_##name) , ## args              \
-                                    : "lr", "memory");                        \
+                                    : "lr", LSS_SYSCALL_CLOBBERS);            \
             __res = __res_r0;                                                 \
             LSS_RETURN(type, __res)
     #else
@@ -2889,10 +2926,10 @@ struct kernel_utsname {
             register long __res_r0 __asm__("r0");                             \
             register long __r7 __asm__("r7") = __NR_##name;                   \
             long __res;                                                       \
-            __asm__ __volatile__ ("swi 0x0\n"                                 \
+            __asm__ __volatile__ (LSS_ENTRYPOINT                              \
                                   : "=r"(__res_r0)                            \
                                   : "r"(__r7) , ## args                       \
-                                  : "memory");                                \
+                                  : LSS_SYSCALL_CLOBBERS);                    \
             __res = __res_r0;                                                 \
             LSS_RETURN(type, __res)
     #endif
@@ -2984,7 +3021,7 @@ struct kernel_utsname {
              *               %r4 = child_tidptr)
              */
             "mov r7, %6\n"
-            "swi 0x0\n"
+            LSS_ENTRYPOINT
 
             /* if (%r0 != 0)
              *   return %r0;
@@ -3002,7 +3039,7 @@ struct kernel_utsname {
             /* Call _exit(%r0).
              */
             "mov r7, %7\n"
-            "swi 0x0\n"
+            LSS_ENTRYPOINT
             /* Unreachable */
             "bkpt #0\n"
          "1:\n"
@@ -3013,7 +3050,7 @@ struct kernel_utsname {
             : "=r"(__res)
             : "r"(__stack), "r"(__flags), "r"(__ptid), "r"(__tls), "r"(__ctid),
               "i"(__NR_clone), "i"(__NR_exit)
-            : "cc", "lr", "memory"
+            : "cc", "lr", LSS_SYSCALL_CLOBBERS
 #ifndef __thumb2__
             , "r7"
 #endif
