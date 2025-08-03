@@ -79,8 +79,7 @@
  * of the supported API.
  */
 
-#if !defined(LSS_INCLUDED) && defined(LSS_HAS_ERRNO) && LSS_HAS_ERRNO != -1 && LSS_HAS_ERRNO != defined(SYS_ERRNO)
-#define LSS_INCLUDED
+#if defined(LSS_HAS_ERRNO) && LSS_HAS_ERRNO != -1 && LSS_HAS_ERRNO != defined(SYS_ERRNO)
 #undef SYS_LINUX_SYSCALL_SUPPORT_H
 #endif
 
@@ -5895,6 +5894,10 @@ LSS_INLINE long LSS_NAME(prctl)(int option, Args&&... args) {
 
 #ifdef __clang__
 #pragma clang diagnostic pop
+#endif
+
+#ifndef LSS_INCLUDED
+#define LSS_INCLUDED
 #endif
 
 #endif
