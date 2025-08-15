@@ -1,5 +1,3 @@
-#pragma once
-
 #include <errno.h>
 
 #pragma push_macro("SYS_ERRNO")
