@@ -136,7 +136,11 @@
 #endif
 
 #ifdef __cplusplus
+#if __cplusplus >= 201103L
 inline namespace lss {
+#else
+extern "C++" {
+#endif
 #endif
 
 /* Some libcs, for example Android NDK and musl, #define these
@@ -5380,7 +5384,6 @@ struct kernel_utsname {
   #endif
 
   LSS_INLINE int LSS_NAME(execv)(const char *path, const char *const argv[]) {
-    extern char **environ;
     return LSS_NAME(execve)(path, argv, (const char *const *)environ);
   }
 
@@ -5901,7 +5904,7 @@ LSS_INLINE pid_t LSS_NAME(vfork)() {
 }
 #endif
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && __cplusplus >= 201103L
 inline namespace helpers {
 LSS_INLINE int LSS_NAME(open)(const char *pathname, int flags) {
   return ::lss::LSS_NAME(open)(pathname, flags, 0);
@@ -5913,7 +5916,7 @@ LSS_INLINE int LSS_NAME(openat)(int dirfd, const char *pathname, int flags) {
 
 template <typename... Args>
 LSS_INLINE long LSS_NAME(prctl)(int option, Args&&... args) {
-  static_assert(sizeof...(args) == 4);
+  static_assert(sizeof...(args) == 4, "Requires 4 parameters");
   return ::lss::LSS_NAME(prctl)(option, (unsigned long)static_cast<Args&&>(args)...);
 }
 }
