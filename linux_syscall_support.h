@@ -2127,6 +2127,13 @@ struct kernel_utsname {
     #define LSS_NAME_COMPAT(name) _LSS_NAME(rawc, name)
   #endif
 
+  #undef LSS_GET_NR
+  #ifdef SYS_GET_NR
+    #define LSS_GET_NR(name) SYS_GET_NR(name)
+  #else
+    #define LSS_GET_NR(name) __NR_##name
+  #endif
+
   #undef  LSS_RETURN
   #if defined(__i386__) || defined(__x86_64__) || defined(__ARM_ARCH_3__) \
        || defined(__ARM_EABI__) || defined(__aarch64__) || defined(__s390__) \
@@ -2269,7 +2276,7 @@ struct kernel_utsname {
         long __res;                                                           \
         __asm__ volatile(LSS_ENTRYPOINT                                       \
                          : "=a" (__res)                                       \
-                         : "0" (__NR_##name)                                  \
+                         : "0" (LSS_GET_NR(name))                             \
                          : "memory");                                         \
         LSS_RETURN(type,__res);                                               \
       }
@@ -2278,21 +2285,21 @@ struct kernel_utsname {
       type LSS_NAME(name)(type1 arg1) {                                       \
         LSS_BODY(type,                                                        \
              : "=a" (__res)                                                   \
-             : "0" (__NR_##name), "ri" ((long)(arg1)));                       \
+             : "0" (LSS_GET_NR(name)), "ri" ((long)(arg1)));                  \
       }
     #undef  _syscall2
     #define _syscall2(type,name,type1,arg1,type2,arg2)                        \
       type LSS_NAME(name)(type1 arg1,type2 arg2) {                            \
         LSS_BODY(type,                                                        \
              : "=a" (__res)                                                   \
-             : "0" (__NR_##name),"ri" ((long)(arg1)), "c" ((long)(arg2)));    \
+             : "0" (LSS_GET_NR(name)),"ri" ((long)(arg1)), "c" ((long)(arg2))); \
       }
     #undef  _syscall3
     #define _syscall3(type,name,type1,arg1,type2,arg2,type3,arg3)             \
       type LSS_NAME(name)(type1 arg1,type2 arg2,type3 arg3) {                 \
         LSS_BODY(type,                                                        \
              : "=a" (__res)                                                   \
-             : "0" (__NR_##name), "ri" ((long)(arg1)), "c" ((long)(arg2)),    \
+             : "0" (LSS_GET_NR(name)), "ri" ((long)(arg1)), "c" ((long)(arg2)), \
                "d" ((long)(arg3)));                                           \
       }
     #undef  _syscall4
@@ -2300,7 +2307,7 @@ struct kernel_utsname {
       type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3, type4 arg4) {   \
         LSS_BODY(type,                                                        \
              : "=a" (__res)                                                   \
-             : "0" (__NR_##name), "ri" ((long)(arg1)), "c" ((long)(arg2)),    \
+             : "0" (LSS_GET_NR(name)), "ri" ((long)(arg1)), "c" ((long)(arg2)), \
                "d" ((long)(arg3)),"S" ((long)(arg4)));                        \
       }
     #undef  _syscall5
@@ -2315,7 +2322,7 @@ struct kernel_utsname {
                              LSS_ENTRYPOINT                                   \
                              "pop  %%ebx"                                     \
                              : "=a" (__res)                                   \
-                             : "i" (__NR_##name), "ri" ((long)(arg1)),        \
+                             : "i" (LSS_GET_NR(name)), "ri" ((long)(arg1)),   \
                                "c" ((long)(arg2)), "d" ((long)(arg3)),        \
                                "S" ((long)(arg4)), "D" ((long)(arg5))         \
                              : "memory");                                     \
@@ -2337,7 +2344,7 @@ struct kernel_utsname {
                              "pop  %%ebx\n"                                   \
                              "pop  %%ebp"                                     \
                              : "=a" (__res)                                   \
-                             : "i" (__NR_##name),  "0" ((long)(&__s)),        \
+                             : "i" (LSS_GET_NR(name)),  "0" ((long)(&__s)),   \
                                "c" ((long)(arg2)), "d" ((long)(arg3)),        \
                                "S" ((long)(arg4)), "D" ((long)(arg5))         \
                              : "memory");                                     \
@@ -2534,7 +2541,7 @@ struct kernel_utsname {
           long long __res;                                                    \
           __asm__ __volatile__(LSS_BODY_ASM##nr LSS_ENTRYPOINT                \
             : "=a" (__res)                                                    \
-            : "0" (__NR_##name) LSS_BODY_ARG##nr(__VA_ARGS__)                 \
+            : "0" (LSS_GET_NR(name)) LSS_BODY_ARG##nr(__VA_ARGS__)            \
             : LSS_BODY_CLOBBER##nr "r11", "rcx", "memory");                   \
           _LSS_RETURN(type, __res, cast)
     #undef  LSS_BODY
@@ -2912,20 +2919,20 @@ struct kernel_utsname {
                                     "add r7, r7, %1\n"                        \
                                     LSS_ENTRYPOINT                            \
                                     : "=r"(__res_r0)                          \
-                                    : "i"(__NR_##name - 0xf0000) , ## args    \
+                                    : "i"(LSS_GET_NR(name) - 0xf0000) , ## args \
                                     : "r7", "lr", LSS_SYSCALL_CLOBBERS);      \
             else                                                              \
               __asm__ __volatile__ ("mov r7, %1\n"                            \
                                     LSS_ENTRYPOINT                            \
                                     : "=r"(__res_r0)                          \
-                                    : "i"(__NR_##name) , ## args              \
+                                    : "i"(LSS_GET_NR(name)) , ## args         \
                                     : "r7", "lr", LSS_SYSCALL_CLOBBERS);      \
             __res = __res_r0;                                                 \
             LSS_RETURN(type, __res)
     #else
       #define LSS_BODY(type,name,args...)                                     \
             register long __res_r0 __asm__("r0");                             \
-            register long __r7 __asm__("r7") = __NR_##name;                   \
+            register long __r7 __asm__("r7") = LSS_GET_NR(name);              \
             long __res;                                                       \
             __asm__ __volatile__ (LSS_ENTRYPOINT                              \
                                   : "=r"(__res_r0)                            \
@@ -3097,7 +3104,7 @@ struct kernel_utsname {
     #undef  LSS_BODY
     #define LSS_BODY(type,name,args...)                                       \
           register int64_t __res_x0 __asm__("x0");                            \
-          register int32_t __w8 __asm__("w8") = __NR_##name;                  \
+          register int32_t __w8 __asm__("w8") = LSS_GET_NR(name);             \
           int64_t __res;                                                      \
           __asm__ __volatile__ (LSS_ENTRYPOINT                                \
                                 : "=r"(__res_x0)                              \
@@ -3248,7 +3255,7 @@ struct kernel_utsname {
                                  "hi", "lo", "memory"
     #endif
     #define LSS_BODY(type,name,r7,...)                                        \
-          register unsigned long __v0 __asm__("$2") = __NR_##name;            \
+          register unsigned long __v0 __asm__("$2") = LSS_GET_NR(name);       \
           __asm__ __volatile__ ("syscall\n"                                   \
                                 : "=r"(__v0), r7 (__r7)                       \
                                 : "0"(__v0), ##__VA_ARGS__                    \
@@ -3298,7 +3305,7 @@ struct kernel_utsname {
                           type5 arg5) {                                       \
         LSS_REG(4, arg1); LSS_REG(5, arg2); LSS_REG(6, arg3);                 \
         LSS_REG(7, arg4);                                                     \
-        register unsigned long __v0 __asm__("$2") = __NR_##name;              \
+        register unsigned long __v0 __asm__("$2") = LSS_GET_NR(name);         \
         __asm__ __volatile__ (".set noreorder\n"                              \
                               "subu  $29, 32\n"                               \
                               "sw    %5, 16($29)\n"                           \
@@ -3335,7 +3342,7 @@ struct kernel_utsname {
                           type5 arg5, type6 arg6) {                           \
         LSS_REG(4, arg1); LSS_REG(5, arg2); LSS_REG(6, arg3);                 \
         LSS_REG(7, arg4);                                                     \
-        register unsigned long __v0 __asm__("$2") = __NR_##name;              \
+        register unsigned long __v0 __asm__("$2") = LSS_GET_NR(name);         \
         __asm__ __volatile__ (".set noreorder\n"                              \
                               "subu  $29, 32\n"                               \
                               "sw    %5, 16($29)\n"                           \
@@ -3460,7 +3467,7 @@ struct kernel_utsname {
   #elif defined (__PPC__)
     #undef  LSS_LOADARGS_0
     #define LSS_LOADARGS_0(name, dummy...)                                    \
-        __sc_0 = __NR_##name
+        __sc_0 = LSS_GET_NR(name)
     #undef  LSS_LOADARGS_1
     #define LSS_LOADARGS_1(name, arg1)                                        \
             LSS_LOADARGS_0(name);                                             \
@@ -3646,7 +3653,7 @@ struct kernel_utsname {
     #undef  LSS_BODY
     #define LSS_BODY(type, name, args...)                                     \
         register unsigned long __nr __asm__("r1")                             \
-            = (unsigned long)(__NR_##name);                                   \
+            = (unsigned long)(LSS_GET_NR(name));                              \
         register long __res_r2 __asm__("r2");                                 \
         long __res;                                                           \
         __asm__ __volatile__                                                  \
@@ -3804,7 +3811,7 @@ struct kernel_utsname {
     #undef  LSS_BODY
     #define LSS_BODY(type,name,args...)                                       \
           register int64_t __res_a0 __asm__("a0");                            \
-          register int64_t __a7 __asm__("a7") = __NR_##name;                  \
+          register int64_t __a7 __asm__("a7") = LSS_GET_NR(name);             \
           int64_t __res;                                                      \
           __asm__ __volatile__ (LSS_ENTRYPOINT                                \
                                 : "=r"(__res_a0)                              \
@@ -3935,7 +3942,7 @@ struct kernel_utsname {
        : [res] "=r" (__res)                                                   \
        :                                                                      \
        LSS_BODY_ARG##nr(__VA_ARGS__)                                          \
-       [sys_num] "ri" (__NR_##name)                                           \
+       [sys_num] "ri" (LSS_GET_NR(name))                                      \
        : "ctpr1", "ctpr2", "ctpr3",                                           \
        "b[0]", "b[1]", "b[2]", "b[3]",                                        \
        "b[4]", "b[5]", "b[6]", "b[7]"                                         \
@@ -4183,7 +4190,7 @@ struct kernel_utsname {
     #undef  LSS_BODY
     #define LSS_BODY(type,name,args...)                                       \
           register int64_t __res_a0 __asm__("a0");                            \
-          register int64_t __a7 __asm__("a7") = __NR_##name;                  \
+          register int64_t __a7 __asm__("a7") = LSS_GET_NR(name);             \
           int64_t __res;                                                      \
           __asm__ __volatile__ ("syscall 0x0\n"                               \
                                 : "=r"(__res_a0)                              \
