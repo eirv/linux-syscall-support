@@ -101,11 +101,6 @@
 #ifndef LSS_INCLUDED
 #include <fcntl.h>
 #include <sched.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
 #include <sys/ptrace.h>
 #include <sys/resource.h>
 #include <sys/time.h>
@@ -115,6 +110,20 @@
 #include <linux/errno.h>
 #include <linux/unistd.h>
 #include <endian.h>
+
+#if defined(__cplusplus) && __has_include(<string>)
+#include <csignal>
+#include <cstdarg>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#else
+#include <signal.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+#endif
 
 #ifdef __mips__
 /* Include definitions of the ABI currently in use.                          */

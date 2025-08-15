@@ -1,4 +1,8 @@
+#if defined(__cplusplus) && __has_include(<cerrno>)
+#include <cerrno>
+#else
 #include <errno.h>
+#endif
 
 #pragma push_macro("SYS_ERRNO")
 #undef SYS_ERRNO
