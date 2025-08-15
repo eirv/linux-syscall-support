@@ -1278,6 +1278,9 @@ struct kernel_utsname {
 #ifndef __NR_getrandom
 #define __NR_getrandom          (__NR_SYSCALL_BASE + 384)
 #endif
+#ifndef __NR_mseal
+#define __NR_mseal              (__NR_SYSCALL_BASE + 462)
+#endif
 /* End of ARM 3/EABI definitions                                             */
 #elif defined(__aarch64__) || defined(__riscv) || defined(__loongarch_lp64)
 #ifndef __NR_setxattr
@@ -1741,6 +1744,9 @@ struct kernel_utsname {
 #endif
 /* End of MIPS (new 32bit API) definitions                                   */
 #endif
+#ifndef __NR_mseal
+#define __NR_mseal              (__NR_Linux + 462)
+#endif
 /* End of MIPS definitions                                                   */
 #elif defined(__PPC__)
 #ifndef __NR_setfsuid
@@ -2035,6 +2041,9 @@ struct kernel_utsname {
 # endif
 #endif /* __s390__ */
 /* End of s390/s390x definitions                                             */
+#ifndef __NR_mseal
+#define __NR_mseal 462
+#endif
 #endif
 #endif
 
@@ -5702,10 +5711,14 @@ LSS_INLINE int LSS_NAME_COMPAT(fstatat)(int dirfd, const char *pathname, struct 
 
 LSS_INLINE _syscall6(int, copy_file_range, int, fd_in, loff_t *, off_in, int, fd_out, loff_t *, off_out, size_t, size, unsigned int, flags)
 LSS_INLINE _syscall5(int, execveat, int, dirfd, const char *, pathname, const char *const *, argv, const char *const *, envp, int, flags)
+LSS_INLINE _syscall4(int, faccessat, int, dirfd, const char *, pathname, int, mode, int, flags)
 LSS_INLINE _syscall1(int, fchdir, int, fd)
 LSS_INLINE _syscall2(int, fchmod, int, fd, mode_t, mode)
 LSS_INLINE _syscall3(int, fchmodat, int, dirfd, const char *, pathname, mode_t, mode)
-LSS_INLINE _syscall4(int, faccessat, int, dirfd, const char *, pathname, int, mode, int, flags)
+LSS_INLINE _syscall4(int, fgetxattr, int, fd, const char *, name, void *, value, size_t, size)
+LSS_INLINE _syscall3(int, flistxattr, int, fd, char *, list, size_t, size)
+LSS_INLINE _syscall2(int, fremovexattr, int, fd, const char *, name)
+LSS_INLINE _syscall5(int, fsetxattr, int, fd, const char *, name, const void *, value, size_t, size, int, flags)
 LSS_INLINE _syscall2(int, getcwd, char *, buf, size_t, size)
 LSS_INLINE _syscall0(gid_t, getgid)
 LSS_INLINE _syscall0(uid_t, getuid)
@@ -5713,6 +5726,7 @@ LSS_INLINE _syscall1(int, inotify_init1, int, flags)
 LSS_INLINE _syscall3(int, inotify_add_watch, int, fd, const char *, pathname, unsigned int, mask)
 LSS_INLINE _syscall2(int, inotify_rm_watch, int, fd, int, wd)
 LSS_INLINE _syscall5(int, linkat, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, int, flags)
+LSS_INLINE _syscall2(int, lremovexattr, const char *, pathname, const char *, name)
 LSS_INLINE _syscall2(int, memfd_create, const char *, name, unsigned int, flags)
 LSS_INLINE _syscall3(int, mkdirat, int, dirfd, const char *, name, mode_t, mode)
 LSS_INLINE _syscall3(int, madvise, void *, addr, size_t, size, int, behavior)
@@ -5720,6 +5734,7 @@ LSS_INLINE _syscall3(int, mincore, void *, addr, size_t, size, unsigned char *, 
 LSS_INLINE _syscall2(int, mlock, void *, addr, size_t, size)
 LSS_INLINE _syscall3(int, mlock2, void *, addr, size_t, size, int, flags)
 LSS_INLINE _syscall1(int, mlockall, int, flags)
+LSS_INLINE _syscall3(int, mseal, void *, addr, size_t, size, unsigned long, flags)
 LSS_INLINE _syscall3(int, msync, void *, addr, size_t, size, int, flags)
 LSS_INLINE _syscall2(int, munlock, void *, addr, size_t, size)
 LSS_INLINE _syscall0(int, munlockall)
@@ -5727,6 +5742,7 @@ LSS_INLINE _syscall1(int, personality, unsigned long, persona)
 LSS_INLINE _syscall6(ssize_t, process_vm_readv, pid_t, pid, const struct kernel_iovec *, local_iov, unsigned long, local_iov_count, const struct kernel_iovec *, remote_iov, unsigned long, remote_iov_count, unsigned long, flags)
 LSS_INLINE _syscall6(ssize_t, process_vm_writev, pid_t, pid, const struct kernel_iovec *, local_iov, unsigned long, local_iov_count, const struct kernel_iovec *, remote_iov, unsigned long, remote_iov_count, unsigned long, flags)
 LSS_INLINE _syscall3(ssize_t, readv, int, fd, const struct kernel_iovec *, vec, unsigned long, vlen)
+LSS_INLINE _syscall2(int, removexattr, const char *, pathname, const char *, name)
 LSS_INLINE _syscall5(int, renameat2, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, unsigned, flags)
 LSS_INLINE _syscall3(int, seccomp, int, op, int, flags, void *, args)
 LSS_INLINE _syscall3(int, symlinkat, const char *, old_name, int, new_dirfd, const char *, new_name)
@@ -5859,9 +5875,27 @@ LSS_INLINE int LSS_NAME(symlink)(const char *old_name, const char *new_name) {
 }
 #endif
 
+#ifdef __NR_vfork
+LSS_INLINE _syscall0(pid_t, vfork)
+#elif defined(__aarch64__) || defined(__riscv)
+LSS_INLINE pid_t LSS_NAME(vfork)() {
+  int flags = SIGCHLD | CLONE_VM | CLONE_VFORK;
+  void *child_stack = NULL;
+  void *parent_tidptr = NULL;
+  void *newtls = NULL;
+  void *child_tidptr = NULL;
+
+  LSS_REG(0, flags);
+  LSS_REG(1, child_stack);
+  LSS_REG(2, parent_tidptr);
+  LSS_REG(3, newtls);
+  LSS_REG(4, child_tidptr);
+  LSS_BODY(pid_t, clone, "r"(__r0), "r"(__r1), "r"(__r2), "r"(__r3), "r"(__r4));
+}
+#endif
+
 #ifdef __cplusplus
 inline namespace helpers {
-
 LSS_INLINE int LSS_NAME(open)(const char *pathname, int flags) {
   return ::lss::LSS_NAME(open)(pathname, flags, 0);
 }
@@ -5875,7 +5909,6 @@ LSS_INLINE long LSS_NAME(prctl)(int option, Args&&... args) {
   static_assert(sizeof...(args) == 4);
   return ::lss::LSS_NAME(prctl)(option, (unsigned long)static_cast<Args&&>(args)...);
 }
-
 }
 #endif
 
