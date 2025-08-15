@@ -58,7 +58,7 @@
 
 #include <linux/capability.h>
 
-#include "linux_syscall_support_with_errno.h"
+#include "linux_syscall_support_errno.h"
 
 #define SKIP_TEST_EXIT_STATUS 77
 

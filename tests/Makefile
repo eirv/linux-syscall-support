@@ -54,14 +54,14 @@ TESTS = \
 
 all: check
 
-%_test: %.c test_skel.h $(top_srcdir)/linux_syscall_support_with_errno.h
+%_test: %.c test_skel.h $(top_srcdir)/linux_syscall_support_errno.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $<
 
 # Force building C as C++ code to improve compile-time coverage.
-%_cc_test: %.c test_skel.h $(top_srcdir)/linux_syscall_support_with_errno.h
+%_cc_test: %.c test_skel.h $(top_srcdir)/linux_syscall_support_errno.h
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $<
 
-%_test: %.cc test_skel.h $(top_srcdir)/linux_syscall_support_with_errno.h
+%_test: %.cc test_skel.h $(top_srcdir)/linux_syscall_support_errno.h
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $<
 
 %_run: %_test
