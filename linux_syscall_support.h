@@ -148,7 +148,7 @@
 #if __cplusplus >= 201103L
 inline namespace lss {
 #else
-extern "C++" {
+extern "C" {
 #endif
 #endif
 
@@ -5393,6 +5393,11 @@ struct kernel_utsname {
   #endif
 
   LSS_INLINE int LSS_NAME(execv)(const char *path, const char *const argv[]) {
+#if defined(__cplusplus) && __cplusplus >= 201103L
+    extern char **environ asm("environ");
+#else
+    extern char **environ;
+#endif
     return LSS_NAME(execve)(path, argv, (const char *const *)environ);
   }
 
