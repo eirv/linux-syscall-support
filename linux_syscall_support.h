@@ -111,7 +111,7 @@
 #include <linux/unistd.h>
 #include <endian.h>
 
-#if defined(__cplusplus) && __has_include(<string>)
+#if defined(__cplusplus) && __has_include(<csignal>) && __has_include(<cstdarg>) && __has_include(<cstddef>) && __has_include(<cstdint>) && __has_include(<cstring>)
 #include <csignal>
 #include <cstdarg>
 #include <cstddef>
