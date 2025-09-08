@@ -5737,6 +5737,7 @@ LSS_INLINE int LSS_NAME_COMPAT(fstatat)(int dirfd, const char *pathname, struct 
   return LSS_LP_SELECT(LSS_NAME(newfstatat), LSS_NAME(fstatat64))(dirfd, pathname, buf, flags);
 }
 
+LSS_INLINE _syscall4(int, clock_nanosleep, clockid_t, clock, int, flags, const struct kernel_timespec *, time, struct kernel_timespec *, remainder)
 LSS_INLINE _syscall6(int, copy_file_range, int, fd_in, loff_t *, off_in, int, fd_out, loff_t *, off_out, size_t, size, unsigned int, flags)
 LSS_INLINE _syscall5(int, execveat, int, dirfd, const char *, pathname, const char *const *, argv, const char *const *, envp, int, flags)
 LSS_INLINE _syscall4(int, faccessat, int, dirfd, const char *, pathname, int, mode, int, flags)
@@ -5766,6 +5767,7 @@ LSS_INLINE _syscall3(int, mseal, void *, addr, size_t, size, unsigned long, flag
 LSS_INLINE _syscall3(int, msync, void *, addr, size_t, size, int, flags)
 LSS_INLINE _syscall2(int, munlock, void *, addr, size_t, size)
 LSS_INLINE _syscall0(int, munlockall)
+LSS_INLINE _syscall2(int, nanosleep, const struct kernel_timespec *, duration, struct kernel_timespec *, remainder)
 LSS_INLINE _syscall1(int, personality, unsigned long, persona)
 LSS_INLINE _syscall6(ssize_t, process_vm_readv, pid_t, pid, const struct kernel_iovec *, local_iov, unsigned long, local_iov_count, const struct kernel_iovec *, remote_iov, unsigned long, remote_iov_count, unsigned long, flags)
 LSS_INLINE _syscall6(ssize_t, process_vm_writev, pid_t, pid, const struct kernel_iovec *, local_iov, unsigned long, local_iov_count, const struct kernel_iovec *, remote_iov, unsigned long, remote_iov_count, unsigned long, flags)
@@ -5780,6 +5782,20 @@ LSS_INLINE _syscall1(int, uname, struct kernel_utsname *, buf)
 LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *const *envp) {
   return LSS_NAME(execveat)(fd, "", argv, envp, AT_EMPTY_PATH);
 }
+
+LSS_INLINE uint32_t LSS_NAME(sleep)(uint32_t seconds) {
+#if !defined(__LP64__)
+  if (seconds > INT_MAX) return seconds - INT_MAX + LSS_NAME(sleep)(INT_MAX);
+#endif
+  struct kernel_timespec ts = {(long)seconds, 0};
+  return LSS_NAME(nanosleep)(&ts, &ts) < 0 ? ts.tv_sec : 0;
+}
+
+LSS_INLINE int LSS_NAME(usleep)(useconds_t microseconds) {
+  struct kernel_timespec ts = {(long)(microseconds / 1000000), (long)((microseconds % 1000000) * 1000)};
+  return LSS_NAME(nanosleep)(&ts, NULL);
+}
+
 
 #ifdef __i386__
 #ifndef __NR__sync_file_range
