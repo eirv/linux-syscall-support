@@ -5633,7 +5633,7 @@ struct kernel_utsname {
       int flags = AT_NO_AUTOMOUNT | AT_EMPTY_PATH;
       int mask = STATX_BASIC_STATS;
       int res = LSS_NAME(statx)(fd, "", flags, mask, &stx);
-      LSS_NAME(cp_stat_statx)(buf, &stx);
+      if (res == 0) LSS_NAME(cp_stat_statx)(buf, &stx);
       return res;
     #endif
   }
@@ -5649,7 +5649,7 @@ struct kernel_utsname {
       int flags = AT_NO_AUTOMOUNT | AT_STATX_SYNC_AS_STAT;
       int mask = STATX_BASIC_STATS;
       int res = LSS_NAME(statx)(AT_FDCWD, pathname, flags, mask, &stx);
-      LSS_NAME(cp_stat_statx)(buf, &stx);
+      if (res == 0) LSS_NAME(cp_stat_statx)(buf, &stx);
       return res;
     #endif
   }
@@ -5665,7 +5665,7 @@ struct kernel_utsname {
       int flags = AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW;
       int mask = STATX_BASIC_STATS;
       int res = LSS_NAME(statx)(AT_FDCWD, pathname, flags, mask, &stx);
-      LSS_NAME(cp_stat_statx)(buf, &stx);
+      if (res == 0) LSS_NAME(cp_stat_statx)(buf, &stx);
       return res;
     #endif
   }
@@ -5795,7 +5795,6 @@ LSS_INLINE int LSS_NAME(usleep)(useconds_t microseconds) {
   struct kernel_timespec ts = {(long)(microseconds / 1000000), (long)((microseconds % 1000000) * 1000)};
   return LSS_NAME(nanosleep)(&ts, NULL);
 }
-
 
 #ifdef __i386__
 #ifndef __NR__sync_file_range
