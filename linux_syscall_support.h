@@ -2928,18 +2928,22 @@ struct kernel_utsname {
             register long __res_r0 __asm__("r0");                             \
             long __res;                                                       \
             LSS_if_constexpr (__NR_##name > 0xf0000)                          \
-              __asm__ __volatile__ ("mov r7, #0xf0000\n"                      \
+              __asm__ __volatile__ ("mov r8, r7\n"                            \
+                                    "mov r7, #0xf0000\n"                      \
                                     "add r7, r7, %1\n"                        \
                                     LSS_ENTRYPOINT                            \
+                                    "mov r7, r8\n"                            \
                                     : "=r"(__res_r0)                          \
                                     : "i"(LSS_GET_NR(name) - 0xf0000) , ## args \
-                                    : "r7", "lr", LSS_SYSCALL_CLOBBERS);      \
+                                    : "r8", "lr", LSS_SYSCALL_CLOBBERS);      \
             else                                                              \
-              __asm__ __volatile__ ("mov r7, %1\n"                            \
+              __asm__ __volatile__ ("mov r8, r7\n"                            \
+                                    "mov r7, %1\n"                            \
                                     LSS_ENTRYPOINT                            \
+                                    "mov r7, r8\n"                            \
                                     : "=r"(__res_r0)                          \
                                     : "i"(LSS_GET_NR(name)) , ## args         \
-                                    : "r7", "lr", LSS_SYSCALL_CLOBBERS);      \
+                                    : "r8", "lr", LSS_SYSCALL_CLOBBERS);      \
             __res = __res_r0;                                                 \
             LSS_RETURN(type, __res)
     #else
