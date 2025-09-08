@@ -4368,8 +4368,10 @@ struct kernel_utsname {
                        int,     o,              int,         v,
                        struct kernel_timespec*, t,
                        int*,    u2,             int,         v2)
+#ifdef __NR_getdents
   LSS_INLINE _syscall3(int,     getdents,        int,         f,
                        struct kernel_dirent*, d, int,    c)
+#endif
   LSS_INLINE _syscall3(int,     getdents64,      int,         f,
                       struct kernel_dirent64*, d, int,    c)
   LSS_INLINE _syscall0(gid_t,   getegid)
