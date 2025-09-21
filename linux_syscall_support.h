@@ -264,6 +264,12 @@ struct kernel_msghdr {
   unsigned           msg_flags;
 };
 
+/* include/linux/socket.h                                                    */
+struct kernel_mmsghdr {
+  struct kernel_msghdr msg_hdr;
+  unsigned int       msg_len;
+};
+
 /* include/asm-generic/poll.h                                                */
 struct kernel_pollfd {
   int                fd;
@@ -382,6 +388,12 @@ struct kernel_sigaction {
 struct kernel_sockaddr {
   unsigned short     sa_family;
   char               sa_data[14];
+};
+
+/* include/linux/un.h                                                    */
+struct kernel_sockaddr_un {
+  unsigned short     sun_family;
+  char               sun_path[108];
 };
 
 /* include/asm-{arm,aarch64,i386,mips,ppc,s390}/stat.h                       */
@@ -2054,9 +2066,9 @@ struct kernel_utsname {
 # endif
 #endif /* __s390__ */
 /* End of s390/s390x definitions                                             */
+#endif
 #ifndef __NR_mseal
 #define __NR_mseal 462
-#endif
 #endif
 #endif
 
@@ -5739,7 +5751,9 @@ LSS_INLINE int LSS_NAME_COMPAT(fstatat)(int dirfd, const char *pathname, struct 
   return LSS_LP_SELECT(LSS_NAME(newfstatat), LSS_NAME(fstatat64))(dirfd, pathname, buf, flags);
 }
 
+LSS_INLINE _syscall4(int, accept4, int, fd, struct kernel_sockaddr *, addr, unsigned int *, addr_length, int, flags)
 LSS_INLINE _syscall4(int, clock_nanosleep, clockid_t, clock, int, flags, const struct kernel_timespec *, time, struct kernel_timespec *, remainder)
+LSS_INLINE _syscall3(int, connect, int, fd, const struct kernel_sockaddr *, addr, unsigned int, addr_length)
 LSS_INLINE _syscall6(int, copy_file_range, int, fd_in, loff_t *, off_in, int, fd_out, loff_t *, off_out, size_t, size, unsigned int, flags)
 LSS_INLINE _syscall5(int, execveat, int, dirfd, const char *, pathname, const char *const *, argv, const char *const *, envp, int, flags)
 LSS_INLINE _syscall4(int, faccessat, int, dirfd, const char *, pathname, int, mode, int, flags)
@@ -5777,9 +5791,14 @@ LSS_INLINE _syscall3(ssize_t, readv, int, fd, const struct kernel_iovec *, vec, 
 LSS_INLINE _syscall2(int, removexattr, const char *, pathname, const char *, name)
 LSS_INLINE _syscall5(int, renameat2, int, old_dirfd, const char *, old_name, int, new_dirfd, const char *, new_name, unsigned, flags)
 LSS_INLINE _syscall3(int, seccomp, int, op, int, flags, void *, args)
+LSS_INLINE _syscall4(int, sendmmsg, int, fd, const struct kernel_mmsghdr *, msgs, unsigned int, msg_count, int, flags)
 LSS_INLINE _syscall3(int, symlinkat, const char *, old_name, int, new_dirfd, const char *, new_name)
 LSS_INLINE _syscall4(ssize_t, tee, int, fd_in, int, fd_out, size_t, size, unsigned int, flags)
 LSS_INLINE _syscall1(int, uname, struct kernel_utsname *, buf)
+
+LSS_INLINE int LSS_NAME(accept)(int fd, struct kernel_sockaddr *addr, unsigned int *addr_length) {
+  return LSS_NAME(accept4)(fd, addr, addr_length, 0);
+}
 
 LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *const *envp) {
   return LSS_NAME(execveat)(fd, "", argv, envp, AT_EMPTY_PATH);
