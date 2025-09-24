@@ -146,7 +146,13 @@
 
 #ifdef __cplusplus
 #if __cplusplus >= 201103L
-inline namespace lss {
+#undef LSS_NAMESPACE
+#ifdef SYS_NAMESPACE
+#define LSS_NAMESPACE SYS_NAMESPACE
+#else
+#define LSS_NAMESPACE lss
+#endif
+inline namespace LSS_NAMESPACE {
 #else
 extern "C" {
 #endif
@@ -5962,35 +5968,35 @@ LSS_INLINE pid_t LSS_NAME(vfork)() {
 #if defined(__cplusplus) && __cplusplus >= 201103L
 inline namespace helpers {
 LSS_INLINE int LSS_NAME(open)(const char *pathname, int flags) {
-  return ::lss::LSS_NAME(open)(pathname, flags, 0);
+  return ::LSS_NAMESPACE::LSS_NAME(open)(pathname, flags, 0);
 }
 
 LSS_INLINE int LSS_NAME(openat)(int dirfd, const char *pathname, int flags) {
-  return ::lss::LSS_NAME(openat)(dirfd, pathname, flags, 0);
+  return ::LSS_NAMESPACE::LSS_NAME(openat)(dirfd, pathname, flags, 0);
 }
 
 template <typename Int>
 LSS_INLINE int LSS_NAME(fcntl)(int fd, Int op) {
-  return ::lss::LSS_NAME(fcntl)(fd, static_cast<int>(op), 0);
+  return ::LSS_NAMESPACE::LSS_NAME(fcntl)(fd, static_cast<int>(op), 0);
 }
 
 template <typename Int>
 LSS_INLINE int LSS_NAME(ioctl)(int fd, Int op) {
-  return ::lss::LSS_NAME(ioctl)(fd, static_cast<int>(op), 0);
+  return ::LSS_NAMESPACE::LSS_NAME(ioctl)(fd, static_cast<int>(op), 0);
 }
 
 LSS_INLINE void *LSS_NAME(mremap)(void *old_addr, size_t old_size, size_t new_size, int flags) {
-  return ::lss::LSS_NAME(mremap)(old_addr, old_size, new_size, flags, nullptr);
+  return ::LSS_NAMESPACE::LSS_NAME(mremap)(old_addr, old_size, new_size, flags, nullptr);
 }
 
 template <typename A = uintptr_t, typename B = uintptr_t, typename C = uintptr_t, typename D = uintptr_t>
 LSS_INLINE int LSS_NAME(prctl)(int option, A arg2 = 0, B arg3 = 0, C arg4 = 0, D arg5 = 0) {
-  return ::lss::LSS_NAME(prctl)(option, (uintptr_t)arg2, (uintptr_t)arg3, (uintptr_t)arg4, (uintptr_t)arg5);
+  return ::LSS_NAMESPACE::LSS_NAME(prctl)(option, (uintptr_t)arg2, (uintptr_t)arg3, (uintptr_t)arg4, (uintptr_t)arg5);
 }
 
 template <typename Addr = void *, typename Data = void *>
 LSS_INLINE long LSS_NAME(ptrace)(int request, pid_t pid = 0, Addr addr = nullptr, Data data = nullptr) {
-  return ::lss::LSS_NAME(ptrace)(request, pid, reinterpret_cast<void *>((uintptr_t)addr), reinterpret_cast<void *>((uintptr_t)data));
+  return ::LSS_NAMESPACE::LSS_NAME(ptrace)(request, pid, reinterpret_cast<void *>((uintptr_t)addr), reinterpret_cast<void *>((uintptr_t)data));
 }
 }
 
