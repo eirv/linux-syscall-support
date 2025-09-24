@@ -2159,6 +2159,13 @@ struct kernel_utsname {
     #define LSS_GET_NR(name) __NR_##name
   #endif
 
+  #undef LSS_if_constexpr
+  #if defined(__cplusplus) && __cplusplus >= 201703L
+    #define LSS_if_constexpr if constexpr
+  #else
+    #define LSS_if_constexpr if
+  #endif
+
   #undef  LSS_RETURN
   #if defined(__i386__) || defined(__x86_64__) || defined(__ARM_ARCH_3__) \
        || defined(__ARM_EABI__) || defined(__aarch64__) || defined(__s390__) \
@@ -2929,12 +2936,6 @@ struct kernel_utsname {
     #undef LSS_REG
     #define LSS_REG(r,a) register long __r##r __asm__("r"#r) = (long)a
     #undef  LSS_BODY
-    #undef LSS_if_constexpr
-    #if defined(__cplusplus) && __cplusplus >= 201703L
-      #define LSS_if_constexpr if constexpr
-    #else
-      #define LSS_if_constexpr if
-    #endif
     #ifdef __thumb__
       #define LSS_BODY(type,name,args...)                                     \
             register long __res_r0 __asm__("r0");                             \
@@ -5992,6 +5993,369 @@ LSS_INLINE long LSS_NAME(ptrace)(int request, pid_t pid = 0, Addr addr = nullptr
   return ::lss::LSS_NAME(ptrace)(request, pid, reinterpret_cast<void *>((uintptr_t)addr), reinterpret_cast<void *>((uintptr_t)data));
 }
 }
+
+// https://github.com/llvm/llvm-project/tree/main/libc/src/__support/OSUtil/linux
+namespace {
+#undef LSS_SYSCALL_INSTR
+#undef LSS_REGISTER_DECL_0
+#undef LSS_REGISTER_DECL_1
+#undef LSS_REGISTER_DECL_2
+#undef LSS_REGISTER_DECL_3
+#undef LSS_REGISTER_DECL_4
+#undef LSS_REGISTER_DECL_5
+#undef LSS_REGISTER_DECL_6
+#undef LSS_REGISTER_CONSTRAINT_0
+#undef LSS_REGISTER_CONSTRAINT_1
+#undef LSS_REGISTER_CONSTRAINT_2
+#undef LSS_REGISTER_CONSTRAINT_3
+#undef LSS_REGISTER_CONSTRAINT_4
+#undef LSS_REGISTER_CONSTRAINT_5
+#undef LSS_REGISTER_CONSTRAINT_6
+#if defined(__aarch64__)
+#define LSS_REGISTER_DECL_0            \
+  register long x8 asm("x8") = number; \
+  register long x0 asm("x0");
+#define LSS_REGISTER_DECL_1            \
+  register long x8 asm("x8") = number; \
+  register long x0 asm("x0") = arg1;
+#define LSS_REGISTER_DECL_2 LSS_REGISTER_DECL_1 register long x1 asm("x1") = arg2;
+#define LSS_REGISTER_DECL_3 \
+  LSS_REGISTER_DECL_2       \
+  register long x2 asm("x2") = arg3;
+#define LSS_REGISTER_DECL_4 \
+  LSS_REGISTER_DECL_3       \
+  register long x3 asm("x3") = arg4;
+#define LSS_REGISTER_DECL_5 \
+  LSS_REGISTER_DECL_4       \
+  register long x4 asm("x4") = arg5;
+#define LSS_REGISTER_DECL_6 \
+  LSS_REGISTER_DECL_5       \
+  register long x5 asm("x5") = arg6;
+#define LSS_REGISTER_CONSTRAINT_0 "r"(x8)
+#define LSS_REGISTER_CONSTRAINT_1 LSS_REGISTER_CONSTRAINT_0, "r"(x0)
+#define LSS_REGISTER_CONSTRAINT_2 LSS_REGISTER_CONSTRAINT_1, "r"(x1)
+#define LSS_REGISTER_CONSTRAINT_3 LSS_REGISTER_CONSTRAINT_2, "r"(x2)
+#define LSS_REGISTER_CONSTRAINT_4 LSS_REGISTER_CONSTRAINT_3, "r"(x3)
+#define LSS_REGISTER_CONSTRAINT_5 LSS_REGISTER_CONSTRAINT_4, "r"(x4)
+#define LSS_REGISTER_CONSTRAINT_6 LSS_REGISTER_CONSTRAINT_5, "r"(x5)
+#define LSS_SYSCALL_INSTR(input_constraint) \
+  asm volatile(LSS_ENTRYPOINT : "=r"(x0) : input_constraint : LSS_SYSCALL_CLOBBERS)
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number) {
+  LSS_REGISTER_DECL_0;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_0);
+  return x0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1) {
+  LSS_REGISTER_DECL_1;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_1);
+  return x0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2) {
+  LSS_REGISTER_DECL_2;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_2);
+  return x0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2, long arg3) {
+  LSS_REGISTER_DECL_3;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_3);
+  return x0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2, long arg3, long arg4) {
+  LSS_REGISTER_DECL_4;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_4);
+  return x0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long number, long arg1, long arg2, long arg3, long arg4, long arg5) {
+  LSS_REGISTER_DECL_5;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_5);
+  return x0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long number, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6) {
+  LSS_REGISTER_DECL_6;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_6);
+  return x0;
+}
+#elif defined(__ARM_EABI__)
+#undef LSS_R7
+#ifdef __thumb__
+#define LSS_R7 long r7 = number
+#define LSS_SYSCALL_INSTR(input_constraint)             \
+  int temp;                                             \
+  asm volatile(                                         \
+      "mov %[temp], r7\n"                               \
+      "mov r7, %2\n" LSS_ENTRYPOINT "mov r7, %[temp]\n" \
+      : "=r"(r0), [temp] "=&r"(temp)                    \
+      : input_constraint                                \
+      : LSS_SYSCALL_CLOBBERS)
+#else
+#define LSS_R7 register long r7 asm("r7") = number
+#define LSS_SYSCALL_INSTR(input_constraint) \
+  asm volatile(LSS_ENTRYPOINT : "=r"(r0) : input_constraint : LSS_SYSCALL_CLOBBERS)
+#endif
+#define LSS_REGISTER_DECL_0 \
+  LSS_R7;                   \
+  register long r0 asm("r0");
+#define LSS_REGISTER_DECL_1 \
+  LSS_R7;                   \
+  register long r0 asm("r0") = arg1;
+#define LSS_REGISTER_DECL_2 \
+  LSS_REGISTER_DECL_1       \
+  register long r1 asm("r1") = arg2;
+#define LSS_REGISTER_DECL_3 \
+  LSS_REGISTER_DECL_2       \
+  register long r2 asm("r2") = arg3;
+#define LSS_REGISTER_DECL_4 \
+  LSS_REGISTER_DECL_3       \
+  register long r3 asm("r3") = arg4;
+#define LSS_REGISTER_DECL_5 \
+  LSS_REGISTER_DECL_4       \
+  register long r4 asm("r4") = arg5;
+#define LSS_REGISTER_DECL_6 \
+  LSS_REGISTER_DECL_5       \
+  register long r5 asm("r5") = arg6;
+#define LSS_REGISTER_CONSTRAINT_0 "r"(r7)
+#define LSS_REGISTER_CONSTRAINT_1 LSS_REGISTER_CONSTRAINT_0, "r"(r0)
+#define LSS_REGISTER_CONSTRAINT_2 LSS_REGISTER_CONSTRAINT_1, "r"(r1)
+#define LSS_REGISTER_CONSTRAINT_3 LSS_REGISTER_CONSTRAINT_2, "r"(r2)
+#define LSS_REGISTER_CONSTRAINT_4 LSS_REGISTER_CONSTRAINT_3, "r"(r3)
+#define LSS_REGISTER_CONSTRAINT_5 LSS_REGISTER_CONSTRAINT_4, "r"(r4)
+#define LSS_REGISTER_CONSTRAINT_6 LSS_REGISTER_CONSTRAINT_5, "r"(r5)
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number) {
+  LSS_REGISTER_DECL_0;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_0);
+  return r0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1) {
+  LSS_REGISTER_DECL_1;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_1);
+  return r0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2) {
+  LSS_REGISTER_DECL_2;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_2);
+  return r0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2, long arg3) {
+  LSS_REGISTER_DECL_3;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_3);
+  return r0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2, long arg3, long arg4) {
+  LSS_REGISTER_DECL_4;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_4);
+  return r0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long number, long arg1, long arg2, long arg3, long arg4, long arg5) {
+  LSS_REGISTER_DECL_5;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_5);
+  return r0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long number, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6) {
+  LSS_REGISTER_DECL_6;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_6);
+  return r0;
+}
+#elif defined(__i386__)
+LSS_INLINE long LSS_NAME(__syscall_impl)(long num) {
+  long ret;
+  asm volatile(LSS_ENTRYPOINT : "=a"(ret) : "a"(num) : "memory");
+  return ret;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long num, long arg1) {
+  long ret;
+  asm volatile(LSS_ENTRYPOINT : "=a"(ret) : "a"(num), "b"(arg1) : "memory");
+  return ret;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long num, long arg1, long arg2) {
+  long ret;
+  asm volatile(LSS_ENTRYPOINT : "=a"(ret) : "a"(num), "b"(arg1), "c"(arg2) : "memory");
+  return ret;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long num, long arg1, long arg2, long arg3) {
+  long ret;
+  asm volatile(LSS_ENTRYPOINT : "=a"(ret) : "a"(num), "b"(arg1), "c"(arg2), "d"(arg3) : "memory");
+  return ret;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long num, long arg1, long arg2, long arg3, long arg4) {
+  long ret;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(ret)
+               : "a"(num), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4)
+               : "memory");
+  return ret;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long num, long arg1, long arg2, long arg3, long arg4, long arg5) {
+  long ret;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(ret)
+               : "a"(num), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4), "D"(arg5)
+               : "memory");
+  return ret;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long num, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6) {
+  long ret;
+  asm volatile(
+      "push %[arg6]\n"
+      "push %%ebp\n"
+      "mov 4(%%esp), %%ebp\n" LSS_ENTRYPOINT
+      "pop %%ebp\n"
+      "add $4, %%esp\n"
+      : "=a"(ret)
+      : "a"(num), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4), "D"(arg5), [arg6] "m"(arg6)
+      : "memory");
+  return ret;
+}
+#elif defined(__x86_64__)
+#undef LSS_SYSCALL_CLOBBERS
+#define LSS_SYSCALL_CLOBBERS "rcx", "r11", "memory"
+LSS_INLINE long LSS_NAME(__syscall_impl)(long __number) {
+  long retcode;
+  asm volatile(LSS_ENTRYPOINT : "=a"(retcode) : "a"(__number) : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long __number, long __arg1) {
+  long retcode;
+  asm volatile(LSS_ENTRYPOINT : "=a"(retcode) : "a"(__number), "D"(__arg1) : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long __number, long __arg1, long __arg2) {
+  long retcode;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(retcode)
+               : "a"(__number), "D"(__arg1), "S"(__arg2)
+               : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long __number, long __arg1, long __arg2, long __arg3) {
+  long retcode;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(retcode)
+               : "a"(__number), "D"(__arg1), "S"(__arg2), "d"(__arg3)
+               : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long __number, long __arg1, long __arg2, long __arg3, long __arg4) {
+  long retcode;
+  register long r10 asm("r10") = __arg4;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(retcode)
+               : "a"(__number), "D"(__arg1), "S"(__arg2), "d"(__arg3), "r"(r10)
+               : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long __number, long __arg1, long __arg2, long __arg3, long __arg4, long __arg5) {
+  long retcode;
+  register long r10 asm("r10") = __arg4;
+  register long r8 asm("r8") = __arg5;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(retcode)
+               : "a"(__number), "D"(__arg1), "S"(__arg2), "d"(__arg3), "r"(r10), "r"(r8)
+               : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long __number, long __arg1, long __arg2, long __arg3, long __arg4, long __arg5, long __arg6) {
+  long retcode;
+  register long r10 asm("r10") = __arg4;
+  register long r8 asm("r8") = __arg5;
+  register long r9 asm("r9") = __arg6;
+  asm volatile(LSS_ENTRYPOINT
+               : "=a"(retcode)
+               : "a"(__number), "D"(__arg1), "S"(__arg2), "d"(__arg3), "r"(r10), "r"(r8), "r"(r9)
+               : LSS_SYSCALL_CLOBBERS);
+  return retcode;
+}
+#elif defined(__riscv)
+#define LSS_REGISTER_DECL_0            \
+  register long a7 asm("a7") = number; \
+  register long a0 asm("a0");
+#define LSS_REGISTER_DECL_1            \
+  register long a7 asm("a7") = number; \
+  register long a0 asm("a0") = arg1;
+#define LSS_REGISTER_DECL_2 LSS_REGISTER_DECL_1 register long a1 asm("a1") = arg2;
+#define LSS_REGISTER_DECL_3 \
+  LSS_REGISTER_DECL_2       \
+  register long a2 asm("a2") = arg3;
+#define LSS_REGISTER_DECL_4 \
+  LSS_REGISTER_DECL_3       \
+  register long a3 asm("a3") = arg4;
+#define LSS_REGISTER_DECL_5 \
+  LSS_REGISTER_DECL_4       \
+  register long a4 asm("a4") = arg5;
+#define LSS_REGISTER_DECL_6 \
+  LSS_REGISTER_DECL_5       \
+  register long a5 asm("a5") = arg6;
+#define LSS_REGISTER_CONSTRAINT_0 "r"(a7)
+#define LSS_REGISTER_CONSTRAINT_1 LSS_REGISTER_CONSTRAINT_0, "r"(a0)
+#define LSS_REGISTER_CONSTRAINT_2 LSS_REGISTER_CONSTRAINT_1, "r"(a1)
+#define LSS_REGISTER_CONSTRAINT_3 LSS_REGISTER_CONSTRAINT_2, "r"(a2)
+#define LSS_REGISTER_CONSTRAINT_4 LSS_REGISTER_CONSTRAINT_3, "r"(a3)
+#define LSS_REGISTER_CONSTRAINT_5 LSS_REGISTER_CONSTRAINT_4, "r"(a4)
+#define LSS_REGISTER_CONSTRAINT_6 LSS_REGISTER_CONSTRAINT_5, "r"(a5)
+#define LSS_SYSCALL_INSTR(input_constraint) \
+  asm volatile(LSS_ENTRYPOINT : "=r"(a0) : input_constraint : LSS_SYSCALL_CLOBBERS)
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number) {
+  LSS_REGISTER_DECL_0;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_0);
+  return a0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1) {
+  LSS_REGISTER_DECL_1;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_1);
+  return a0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2) {
+  LSS_REGISTER_DECL_2;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_2);
+  return a0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2, long arg3) {
+  LSS_REGISTER_DECL_3;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_3);
+  return a0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(long number, long arg1, long arg2, long arg3, long arg4) {
+  LSS_REGISTER_DECL_4;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_4);
+  return a0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long number, long arg1, long arg2, long arg3, long arg4, long arg5) {
+  LSS_REGISTER_DECL_5;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_5);
+  return a0;
+}
+LSS_INLINE long LSS_NAME(__syscall_impl)(
+    long number, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6) {
+  LSS_REGISTER_DECL_6;
+  LSS_SYSCALL_INSTR(LSS_REGISTER_CONSTRAINT_6);
+  return a0;
+}
+#endif
+}  // namespace
+
+#if defined(__aarch64__) || defined(__ARM_EABI__) || defined(__i386__) || defined(__x86_64__) || \
+    defined(__riscv)
+template <typename T = long, bool kRetryIfInterrupted = false, typename... Args>
+LSS_INLINE T LSS_NAME(syscall)(long number, Args... args) {
+  static_assert(sizeof...(args) <= 6, "Too many arguments");
+  for (long result;;) {
+    result = LSS_NAME(__syscall_impl)(number, (long)args...);
+    LSS_if_constexpr(kRetryIfInterrupted) {
+      if (result == -EINTR) continue;
+    }
+    LSS_RETURN(T, result);
+  }
+}
+#endif
 #endif
 
 /* These restore the original values of these macros saved by the
