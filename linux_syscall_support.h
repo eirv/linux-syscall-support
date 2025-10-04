@@ -2264,6 +2264,10 @@ struct kernel_utsname {
     #undef LSS_ENTRYPOINT
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+#if defined(__cplusplus) && __cplusplus >= 201103L
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(4));
+      extern void (**entrypoint)(void) asm(SYS_SYSCALL_ENTRYPOINT);
+#else
       void (**entrypoint)(void);
       asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(4)
                    /* This logically does 'lea "SYS_SYSCALL_ENTRYPOINT", %0' */
@@ -2272,6 +2276,7 @@ struct kernel_utsname {
                    "add  $_GLOBAL_OFFSET_TABLE_+[.-0b], %0\n"
                    "mov  \"" SYS_SYSCALL_ENTRYPOINT "\"@GOT(%0), %0\n"
                    : "=r"(entrypoint));
+#endif
       return entrypoint;
     }
 
@@ -2525,10 +2530,15 @@ struct kernel_utsname {
     #undef LSS_ENTRYPOINT
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+#if defined(__cplusplus) && __cplusplus >= 201103L
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8));
+      extern void (**entrypoint)(void) asm(SYS_SYSCALL_ENTRYPOINT);
+#else
       void (**entrypoint)(void);
       asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8)
                    "mov \"" SYS_SYSCALL_ENTRYPOINT "\"@GOTPCREL(%%rip), %0\n"
                    : "=r"(entrypoint));
+#endif
       return entrypoint;
     }
 
@@ -2909,6 +2919,10 @@ struct kernel_utsname {
     #undef LSS_SYSCALL_CLOBBERS
     #if defined(SYS_SYSCALL_ENTRYPOINT) && defined(__thumb__)  // TODO: Support arm mode
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+#if defined(__cplusplus) && __cplusplus >= 201103L
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(4));
+      extern void (**entrypoint)(void) asm(SYS_SYSCALL_ENTRYPOINT);
+#else
       void (**entrypoint)(void);
       asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(4)
                    "ldr %0, 1f\n"
@@ -2917,6 +2931,7 @@ struct kernel_utsname {
                  "1:.long \"" SYS_SYSCALL_ENTRYPOINT "\"-0b-4\n"
                  "2:\n"
                    : "=r"(entrypoint));
+#endif
       return entrypoint;
     }
 
@@ -2945,24 +2960,15 @@ struct kernel_utsname {
     #ifdef __thumb__
       #define LSS_BODY(type,name,args...)                                     \
             register long __res_r0 __asm__("r0");                             \
-            long __res;                                                       \
-            LSS_if_constexpr (__NR_##name > 0xf0000)                          \
-              __asm__ __volatile__ ("mov r8, r7\n"                            \
-                                    "mov r7, #0xf0000\n"                      \
-                                    "add r7, r7, %1\n"                        \
-                                    LSS_ENTRYPOINT                            \
-                                    "mov r7, r8\n"                            \
-                                    : "=r"(__res_r0)                          \
-                                    : "i"(LSS_GET_NR(name) - 0xf0000) , ## args \
-                                    : "r8", "lr", LSS_SYSCALL_CLOBBERS);      \
-            else                                                              \
-              __asm__ __volatile__ ("mov r8, r7\n"                            \
-                                    "mov r7, %1\n"                            \
-                                    LSS_ENTRYPOINT                            \
-                                    "mov r7, r8\n"                            \
-                                    : "=r"(__res_r0)                          \
-                                    : "i"(LSS_GET_NR(name)) , ## args         \
-                                    : "r8", "lr", LSS_SYSCALL_CLOBBERS);      \
+            long __res, __tmp;                                                \
+            long __nr = LSS_GET_NR(name);                                     \
+            __asm__ __volatile__ ("mov %1, r7\n"                              \
+                                  "mov r7, %2\n"                              \
+                                  LSS_ENTRYPOINT                              \
+                                  "mov r7, %1\n"                              \
+                                  : "=r"(__res_r0), "=&r"(__tmp)              \
+                                  : "r"(__nr) , ## args                       \
+                                  : "lr", LSS_SYSCALL_CLOBBERS);              \
             __res = __res_r0;                                                 \
             LSS_RETURN(type, __res)
     #else
@@ -3112,10 +3118,16 @@ struct kernel_utsname {
     #undef LSS_SYSCALL_CLOBBERS
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+#if defined(__cplusplus) && __cplusplus >= 201103L
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8));
+      extern void (**entrypoint)(void) asm(SYS_SYSCALL_ENTRYPOINT);
+#else
       void (**entrypoint)(void);
       asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8)
-                   "adr %0, \"" SYS_SYSCALL_ENTRYPOINT "\"\n"
+                   "adrp %0, \"" SYS_SYSCALL_ENTRYPOINT "\"\n"
+                   "ldr %0, [%0, :lo12:\"" SYS_SYSCALL_ENTRYPOINT "\"]\n"
                    : "=r"(entrypoint));
+#endif
       return entrypoint;
     }
 
@@ -3140,11 +3152,11 @@ struct kernel_utsname {
     #undef  LSS_BODY
     #define LSS_BODY(type,name,args...)                                       \
           register int64_t __res_x0 __asm__("x0");                            \
-          register int32_t __w8 __asm__("w8") = LSS_GET_NR(name);             \
+          register int64_t __x8 __asm__("x8") = LSS_GET_NR(name);             \
           int64_t __res;                                                      \
           __asm__ __volatile__ (LSS_ENTRYPOINT                                \
                                 : "=r"(__res_x0)                              \
-                                : "r"(__w8) , ## args                         \
+                                : "r"(__x8) , ## args                         \
                                 : LSS_SYSCALL_CLOBBERS);                      \
           __res = __res_x0;                                                   \
           LSS_RETURN(type, __res)
@@ -3820,10 +3832,15 @@ struct kernel_utsname {
     #undef LSS_SYSCALL_CLOBBERS
     #ifdef SYS_SYSCALL_ENTRYPOINT
     static inline void (**LSS_NAME(get_syscall_entrypoint)(void))(void) {
+#if defined(__cplusplus) && __cplusplus >= 201103L
+      asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8));
+      extern void (**entrypoint)(void) asm(SYS_SYSCALL_ENTRYPOINT);
+#else
       void (**entrypoint)(void);
       asm volatile(LSS_SYSCALL_ENTRYPOINT_DEF(8)
                    "lla %0, \"" SYS_SYSCALL_ENTRYPOINT "\"\n"
                    : "=r"(entrypoint));
+#endif
       return entrypoint;
     }
 
@@ -4339,7 +4356,6 @@ struct kernel_utsname {
     }
 
   #endif
-  #define __NR__exit   __NR_exit
   #define __NR__gettid __NR_gettid
   #define __NR__mremap __NR_mremap
   LSS_INLINE _syscall1(void *,  brk,             void *,      e)
@@ -4360,8 +4376,6 @@ struct kernel_utsname {
   #endif
   LSS_INLINE _syscall3(int,     execve,          const char*, f,
                        const char*const*,a,const char*const*, e)
-  LSS_INLINE _syscall1(int,     _exit,           int,         e)
-  LSS_INLINE _syscall1(int,     exit_group,      int,         e)
   LSS_INLINE _syscall3(int,     fcntl,           int,         f,
                        int,            c, long,   a)
   #if defined(__NR_fork)
@@ -5877,6 +5891,31 @@ LSS_INLINE _syscall2(int, creat, const char *, pathname, mode_t, mode)
 LSS_INLINE int LSS_NAME(creat)(const char *pathname, mode_t mode) {
   return LSS_NAME(open)(pathname, O_CREAT | O_TRUNC | O_WRONLY, mode);
 }
+#endif
+
+#if __has_builtin(__builtin_unreachable)
+#ifndef __NR___exit
+#define __NR___exit __NR_exit
+#endif
+#ifndef __NR__exit_group
+#define __NR__exit_group __NR_exit_group
+#endif
+LSS_INLINE _syscall1(int, __exit, int, e)
+LSS_INLINE _syscall1(int, _exit_group, int, e)
+__attribute__((noreturn)) LSS_INLINE void LSS_NAME(_exit)(int status) {
+  LSS_NAME(__exit)(status);
+  __builtin_unreachable();
+}
+__attribute__((noreturn)) LSS_INLINE void LSS_NAME(exit_group)(int status) {
+  LSS_NAME(_exit_group)(status);
+  __builtin_unreachable();
+}
+#else
+#ifndef __NR__exit
+#define __NR__exit __NR_exit
+#endif
+LSS_INLINE _syscall1(int, _exit, int, e)
+LSS_INLINE _syscall1(int, exit_group, int, e)
 #endif
 
 #ifdef __NR_inotify_init
