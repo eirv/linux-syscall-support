@@ -79,15 +79,13 @@
  * of the supported API.
  */
 
+// clang-format off
+
 #if defined(LSS_HAS_ERRNO) && LSS_HAS_ERRNO != -1 && LSS_HAS_ERRNO != defined(SYS_ERRNO)
 #undef SYS_LINUX_SYSCALL_SUPPORT_H
 #endif
 
 #ifndef SYS_LINUX_SYSCALL_SUPPORT_H
-#define SYS_LINUX_SYSCALL_SUPPORT_H
-
-// clang-format off
-
 /* We currently only support x86-32, x86-64, ARM, MIPS, PPC, s390 and s390x
  * on Linux.
  * Porting to other related platforms should not be difficult.
@@ -97,6 +95,7 @@
      defined(__aarch64__) || defined(__s390__) || defined(__e2k__) ||  \
      (defined(__riscv) && __riscv_xlen == 64) || defined(__loongarch_lp64))  \
   && (defined(__linux) || defined(__ANDROID__))
+#define SYS_LINUX_SYSCALL_SUPPORT_H
 
 #ifndef LSS_INCLUDED
 #if defined(__cplusplus) && __has_include(<csignal>) && __has_include(<cstdarg>) && __has_include(<cstddef>) && __has_include(<cstdint>) && __has_include(<cstring>)
@@ -134,7 +133,6 @@
 #include <asm/sgidefs.h>
 #else
 #include <sgidefs.h>
-#endif
 #endif
 #endif
 #endif
@@ -3110,6 +3108,19 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       }
       LSS_RETURN(int, __res);
     }
+    LSS_INLINE void (*LSS_NAME(restore_rt)(void))(void) {
+      long long res;
+      __asm__ __volatile__("b      2f\n"
+                        "1:\n"
+                          "mov     r7, %1\n"
+                          LSS_ENTRYPOINT
+                        "2:\n"
+                          "adr     %0, 1b\n"
+                           : "=r" (res)
+                           : "i"  (__NR_rt_sigreturn)
+                           : LSS_SYSCALL_CLOBBERS);
+      return (void (*)(void))(uintptr_t)res;
+    }
   #elif defined(__aarch64__)
     /* Most definitions of _syscallX() neglect to mark "memory" as being
      * clobbered. This causes problems with compilers, that do a better job
@@ -5799,26 +5810,6 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   _rc; })
 #endif
 
-#if defined(__NR_rt_sigreturn) && (defined(__aarch64__) || defined(__ARM_EABI__) || defined(__i386__) || defined(__x86_64__))
-__attribute__((naked)) LSS_INLINE void LSS_NAME(rt_sigreturn)() {
-  asm(
-#if defined(__aarch64__)
-      "mov w8, %0\n"
-      "svc #0    \n" ::"i"(__NR_rt_sigreturn)
-#elif defined(__arm__)
-      "mov r7, %0\n"
-      "swi 0x0   \n" ::"i"(__NR_rt_sigreturn)
-#elif defined(__i386__)
-      "movl %0, %%eax\n"
-      "int  $0x80    \n" ::"i"(__NR_rt_sigreturn)
-#elif defined(__x86_64__)
-      "movq    %0, %%rax\n"
-      "syscall          \n" ::"i"(__NR_rt_sigreturn)
-#endif
-  );
-}
-#endif
-
 #ifdef __cplusplus
 #ifndef __LP64__
 LSS_INLINE int LSS_NAME(fstat)(int fd, kernel_stat_compat *buf) {
@@ -6495,4 +6486,5 @@ LSS_INLINE T LSS_NAME(syscall)(long number, Args... args) {
 #define LSS_INCLUDED
 #endif
 
+#endif
 #endif
