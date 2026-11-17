@@ -5944,9 +5944,13 @@ LSS_INLINE int LSS_NAME(sync_file_range)(int fd, loff_t offset, loff_t length, u
   return LSS_NAME(arm_sync_file_range)(fd, flags, o.w[0], o.w[1], l.w[0], l.w[1]);
 }
 #elif defined(__riscv)
+#ifndef __NR_riscv_hwprobe
+#define __NR_riscv_hwprobe 258
+#endif
 #ifndef __NR_riscv_flush_icache
 #define __NR_riscv_flush_icache 259
 #endif
+LSS_INLINE _syscall5(int, riscv_hwprobe, void *, pairs, size_t, pair_count, size_t, cpusetsize, void *, cpus, unsigned int, flags)
 LSS_INLINE _syscall3(int, riscv_flush_icache, void *, start, void *, end, unsigned long, flags)
 #endif
 
