@@ -97,6 +97,13 @@
   && (defined(__linux) || defined(__ANDROID__))
 #define SYS_LINUX_SYSCALL_SUPPORT_H
 
+#ifndef __has_include
+#define __has_include(x) 0
+#endif
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
 #ifndef LSS_INCLUDED
 #if defined(__cplusplus) && __has_include(<csignal>) && __has_include(<cstdarg>) && __has_include(<cstddef>) && __has_include(<cstdint>) && __has_include(<cstring>)
 #include <csignal>
@@ -2166,10 +2173,40 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   #endif
 
   #undef LSS_if_constexpr
-  #if defined(__cplusplus) && __cplusplus >= 201703L
+  #if defined(__cplusplus) && defined(__cpp_if_constexpr)
     #define LSS_if_constexpr if constexpr
   #else
     #define LSS_if_constexpr if
+  #endif
+
+  #ifndef LSS_make_signed_int_t
+    #if defined(__cplusplus) && __cplusplus >= 201103L && (defined(__aarch64__) || defined(__i386__) || defined(__x86_64__))
+      inline namespace helpers {
+        template <typename T, size_t N> struct LSS_make_int {};
+        template <typename T> struct LSS_make_int<T, 1> { using type = int8_t; using utype = uint8_t; };
+        template <typename T> struct LSS_make_int<T, 2> { using type = int16_t; using utype = uint16_t; };
+        template <typename T> struct LSS_make_int<T, 4> { using type = int32_t; using utype = uint32_t; };
+        template <typename T> struct LSS_make_int<T, 8> { using type = int64_t; using utype = uint64_t; };
+      }
+      #define LSS_make_signed_int_t(t)   typename LSS_make_int<t, sizeof(t)>::type
+      #define LSS_make_unsigned_int_t(t) typename LSS_make_int<t, sizeof(t)>::utype
+    #elif defined(__LP64__)
+      #define LSS_make_signed_int_t(t)   int64_t
+      #define LSS_make_unsigned_int_t(t) uint64_t
+    #else
+      #define LSS_make_signed_int_t(t)   int32_t
+      #define LSS_make_unsigned_int_t(t) uint32_t
+    #endif
+  #endif
+
+  #ifndef LSS_likely
+    #if __has_builtin(__builtin_expect)
+      #define LSS_likely(expr)   __builtin_expect(!!(expr), 1)
+      #define LSS_unlikely(expr) __builtin_expect(!!(expr), 0)
+    #else
+      #define LSS_likely(expr)   (expr)
+      #define LSS_unlikely(expr) (expr)
+    #endif
   #endif
 
   #undef  LSS_RETURN
@@ -2182,7 +2219,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   #ifdef SYS_ERRNO
     #define LSS_RETURN(type, res)                                             \
       do {                                                                    \
-        if ((unsigned long)(res) >= (unsigned long)(-4095)) {                 \
+        if (LSS_unlikely((LSS_make_unsigned_int_t(type))(res) >= (LSS_make_unsigned_int_t(type))(-4095))) { \
           LSS_ERRNO = (int)(-(res));                                          \
           res = -1;                                                           \
         }                                                                     \
@@ -2201,7 +2238,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   #ifdef SYS_ERRNO
     #define LSS_RETURN(type, res, err)                                        \
       do {                                                                    \
-        if (err) {                                                            \
+        if (LSS_unlikely(err)) {                                              \
           unsigned long __errnovalue = (res);                                 \
           LSS_ERRNO = __errnovalue;                                           \
           res = -1;                                                           \
@@ -2211,7 +2248,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   #else
     #define LSS_RETURN(type, res, err)                                        \
       do {                                                                    \
-        if (err) {                                                            \
+        if (LSS_unlikely(err)) {                                              \
           return -(res);                                                      \
         }                                                                     \
         return (type) (res);                                                  \
@@ -2224,7 +2261,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   #ifdef SYS_ERRNO
     #define LSS_RETURN(type, res, err)                                        \
      do {                                                                     \
-       if (err & 0x10000000 ) {                                               \
+       if (LSS_unlikely(err & 0x10000000)) {                                  \
          LSS_ERRNO = (res);                                                   \
          res = -1;                                                            \
        }                                                                      \
@@ -2233,7 +2270,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
   #else
     #define LSS_RETURN(type, res, err)                                        \
      do {                                                                     \
-       if (err & 0x10000000 ) {                                               \
+       if (LSS_unlikely(err & 0x10000000)) {                                  \
          return -(res);                                                       \
        }                                                                      \
        return (type) (res);                                                   \
@@ -2305,7 +2342,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
     #endif
     #undef  LSS_BODY
     #define LSS_BODY(type,args...)                                            \
-      long __res;                                                             \
+      LSS_make_signed_int_t(type) __res;                                      \
       __asm__ __volatile__("push %%ebx\n"                                     \
                            "movl %2,%%ebx\n"                                  \
                            LSS_ENTRYPOINT                                     \
@@ -2316,7 +2353,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
     #undef  _syscall0
     #define _syscall0(type,name)                                              \
       type LSS_NAME(name)(void) {                                             \
-        long __res;                                                           \
+        LSS_make_signed_int_t(type) __res;                                    \
         __asm__ volatile(LSS_ENTRYPOINT                                       \
                          : "=a" (__res)                                       \
                          : "0" (LSS_GET_NR(name))                             \
@@ -2358,7 +2395,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
                       type5,arg5)                                             \
       type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3, type4 arg4,     \
                           type5 arg5) {                                       \
-        long __res;                                                           \
+        LSS_make_signed_int_t(type) __res;                                    \
         __asm__ __volatile__("push %%ebx\n"                                   \
                              "movl %2,%%ebx\n"                                \
                              "movl %1,%%eax\n"                                \
@@ -2376,7 +2413,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
                       type5,arg5,type6,arg6)                                  \
       type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3, type4 arg4,     \
                           type5 arg5, type6 arg6) {                           \
-        long __res;                                                           \
+        LSS_make_signed_int_t(type) __res;                                    \
         struct { long __a1; long __a6; } __s = { (long)arg1, (long) arg6 };   \
         __asm__ __volatile__("push %%ebp\n"                                   \
                              "push %%ebx\n"                                   \
@@ -2564,12 +2601,16 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
      * to an integer of a different size.
      */
     #undef  LSS_SYSCALL_ARG
+    #if defined(__cplusplus)
+    #define LSS_SYSCALL_ARG(a) (LSS_make_unsigned_int_t(decltype(a))(a))
+    #else
     #define LSS_SYSCALL_ARG(a) ((uint64_t)(uintptr_t)(a))
+    #endif
     #undef  _LSS_RETURN
     #ifdef SYS_ERRNO
       #define _LSS_RETURN(type, res, cast)                                    \
         do {                                                                  \
-          if ((uint64_t)(res) >= (uint64_t)(-4095)) {                         \
+          if (LSS_unlikely((LSS_make_unsigned_int_t(type))(res) >= (LSS_make_unsigned_int_t(type))(-4095))) { \
             LSS_ERRNO = (int)(-(res));                                        \
             res = -1;                                                         \
           }                                                                   \
@@ -2586,7 +2627,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 
     #undef  _LSS_BODY
     #define _LSS_BODY(nr, type, name, cast, ...)                              \
-          long long __res;                                                    \
+          LSS_make_signed_int_t(type) __res;                                  \
           __asm__ __volatile__(LSS_BODY_ASM##nr LSS_ENTRYPOINT                \
             : "=a" (__res)                                                    \
             : "0" (LSS_GET_NR(name)) LSS_BODY_ARG##nr(__VA_ARGS__)            \
@@ -2607,9 +2648,9 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
     #define LSS_BODY_ASM1 LSS_BODY_ASM0
     #define LSS_BODY_ASM2 LSS_BODY_ASM1
     #define LSS_BODY_ASM3 LSS_BODY_ASM2
-    #define LSS_BODY_ASM4 LSS_BODY_ASM3 "movq %5,%%r10;"
-    #define LSS_BODY_ASM5 LSS_BODY_ASM4 "movq %6,%%r8;"
-    #define LSS_BODY_ASM6 LSS_BODY_ASM5 "movq %7,%%r9;"
+    #define LSS_BODY_ASM4 LSS_BODY_ASM3 "movq %q5,%%r10;"
+    #define LSS_BODY_ASM5 LSS_BODY_ASM4 "movq %q6,%%r8;"
+    #define LSS_BODY_ASM6 LSS_BODY_ASM5 "movq %q7,%%r9;"
 
     #undef  LSS_BODY_CLOBBER0
     #undef  LSS_BODY_CLOBBER1
@@ -3036,7 +3077,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
                                    int flags, void *arg, int *parent_tidptr,
                                    void *newtls, int *child_tidptr) {
       long __res;
-      if (fn == NULL || child_stack == NULL) {
+      if (LSS_unlikely(fn == NULL) || LSS_unlikely(child_stack == NULL)) {
 #ifdef SYS_ERRNO
         __res = -EINVAL;
         LSS_RETURN(int, __res);
@@ -3161,12 +3202,16 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
     #endif
 
     #undef LSS_REG
+    #if defined(__cplusplus) && defined(__cpp_decltype)
+    #define LSS_REG(r,a) register auto __r##r __asm__("x"#r) = (LSS_make_signed_int_t(decltype(a)))a
+    #else
     #define LSS_REG(r,a) register int64_t __r##r __asm__("x"#r) = (int64_t)a
+    #endif
     #undef  LSS_BODY
     #define LSS_BODY(type,name,args...)                                       \
-          register int64_t __res_x0 __asm__("x0");                            \
+          register LSS_make_signed_int_t(type) __res_x0 __asm__("x0");        \
           register int64_t __x8 __asm__("x8") = LSS_GET_NR(name);             \
-          int64_t __res;                                                      \
+          LSS_make_signed_int_t(type) __res;                                  \
           __asm__ __volatile__ (LSS_ENTRYPOINT                                \
                                 : "=r"(__res_x0)                              \
                                 : "r"(__x8) , ## args                         \
@@ -4830,7 +4875,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-        if ((rgid == NULL) || (egid == NULL) || (sgid == NULL)) {
+        if (LSS_unlikely(rgid == NULL) || LSS_unlikely(egid == NULL) || LSS_unlikely(sgid == NULL)) {
           LSS_ERRNO = EFAULT;
           return -1;
         }
@@ -4840,7 +4885,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       }
 #else
       if ((rc = LSS_NAME(_getresgid32)(rgid, egid, sgid)) == -ENOSYS) {
-        if ((rgid == NULL) || (egid == NULL) || (sgid == NULL)) {
+        if (LSS_unlikely(rgid == NULL) || LSS_unlikely(egid == NULL) || LSS_unlikely(sgid == NULL)) {
           return -EFAULT;
         }
         // Clear the high bits first, since getresgid only sets 16 bits
@@ -4858,7 +4903,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-        if ((ruid == NULL) || (euid == NULL) || (suid == NULL)) {
+        if (LSS_unlikely(ruid == NULL) || LSS_unlikely(euid == NULL) || LSS_unlikely(suid == NULL)) {
           LSS_ERRNO = EFAULT;
           return -1;
         }
@@ -4868,7 +4913,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       }
 #else
       if ((rc = LSS_NAME(_getresuid32)(ruid, euid, suid)) == -ENOSYS) {
-        if ((ruid == NULL) || (euid == NULL) || (suid == NULL)) {
+        if (LSS_unlikely(ruid == NULL) || LSS_unlikely(euid == NULL) || LSS_unlikely(suid == NULL)) {
           return -EFAULT;
         }
         // Clear the high bits first, since getresuid only sets 16 bits
@@ -4884,7 +4929,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setfsgid32)(gid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-        if ((unsigned int)gid & ~0xFFFFu) {
+        if (LSS_unlikely((unsigned int)gid & ~0xFFFFu)) {
           LSS_ERRNO = EINVAL;
           rc = -1;
         } else {
@@ -4893,7 +4938,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       }
 #else
       if ((rc = LSS_NAME(_setfsgid32)(gid)) == -ENOSYS) {
-        if ((unsigned int)gid & ~0xFFFFu) {
+        if (LSS_unlikely((unsigned int)gid & ~0xFFFFu)) {
           rc = -EINVAL;
         } else {
           rc = LSS_NAME(setfsgid)(gid);
@@ -4908,7 +4953,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setfsuid32)(uid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-        if ((unsigned int)uid & ~0xFFFFu) {
+        if (LSS_unlikely((unsigned int)uid & ~0xFFFFu)) {
           LSS_ERRNO = EINVAL;
           rc = -1;
         } else {
@@ -4916,8 +4961,8 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
         }
       }
 #else
-      if ((rc = LSS_NAME(_setfsuid32)(uid))  == -ENOSYS) {
-        if ((unsigned int)uid & ~0xFFFFu) {
+      if ((rc = LSS_NAME(_setfsuid32)(uid)) == -ENOSYS) {
+        if (LSS_unlikely((unsigned int)uid & ~0xFFFFu)) {
           rc = -EINVAL;
         } else {
           rc = LSS_NAME(setfsuid)(uid);
@@ -4932,9 +4977,9 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-        if ((unsigned int)rgid & ~0xFFFFu ||
-            (unsigned int)egid & ~0xFFFFu ||
-            (unsigned int)sgid & ~0xFFFFu) {
+        if (LSS_unlikely((unsigned int)rgid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)egid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)sgid & ~0xFFFFu)) {
           LSS_ERRNO = EINVAL;
           rc = -1;
         } else {
@@ -4942,10 +4987,10 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
         }
       }
 #else
-      if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid))  == -ENOSYS) {
-        if ((unsigned int)rgid & ~0xFFFFu ||
-            (unsigned int)egid & ~0xFFFFu ||
-            (unsigned int)sgid & ~0xFFFFu) {
+      if ((rc = LSS_NAME(_setresgid32)(rgid, egid, sgid)) == -ENOSYS) {
+        if (LSS_unlikely((unsigned int)rgid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)egid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)sgid & ~0xFFFFu)) {
           rc = -EINVAL;
         } else {
           rc = LSS_NAME(setresgid)(rgid, egid, sgid);
@@ -4960,9 +5005,9 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid)) < 0 &&
           LSS_ERRNO == ENOSYS) {
-        if ((unsigned int)ruid & ~0xFFFFu ||
-            (unsigned int)euid & ~0xFFFFu ||
-            (unsigned int)suid & ~0xFFFFu) {
+        if (LSS_unlikely((unsigned int)ruid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)euid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)suid & ~0xFFFFu)) {
           LSS_ERRNO = EINVAL;
           rc = -1;
         } else {
@@ -4971,9 +5016,9 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       }
 #else
       if ((rc = LSS_NAME(_setresuid32)(ruid, euid, suid))  == -ENOSYS) {
-        if ((unsigned int)ruid & ~0xFFFFu ||
-            (unsigned int)euid & ~0xFFFFu ||
-            (unsigned int)suid & ~0xFFFFu) {
+        if (LSS_unlikely((unsigned int)ruid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)euid & ~0xFFFFu) ||
+            LSS_unlikely((unsigned int)suid & ~0xFFFFu)) {
           rc = -EINVAL;
         } else {
           rc = LSS_NAME(setresuid)(ruid, euid, suid);
@@ -4995,7 +5040,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 
   LSS_INLINE int LSS_NAME(sigaddset)(struct kernel_sigset_t *set,
                                      int signum) {
-    if (signum < 1 || (size_t)signum > (8*sizeof(set->sig))) {
+    if (LSS_unlikely(signum < 1) || LSS_unlikely((size_t)signum > (8*sizeof(set->sig)))) {
 #ifdef SYS_ERRNO
       LSS_ERRNO = EINVAL;
       return -1;
@@ -5011,7 +5056,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 
   LSS_INLINE int LSS_NAME(sigdelset)(struct kernel_sigset_t *set,
                                         int signum) {
-    if (signum < 1 || (size_t)signum > (8*sizeof(set->sig))) {
+    if (LSS_unlikely(signum < 1) || LSS_unlikely((size_t)signum > (8*sizeof(set->sig)))) {
 #ifdef SYS_ERRNO
       LSS_ERRNO = EINVAL;
       return -1;
@@ -5027,7 +5072,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 
   LSS_INLINE int LSS_NAME(sigismember)(struct kernel_sigset_t *set,
                                           int signum) {
-    if (signum < 1 || (size_t)signum > (8*sizeof(set->sig))) {
+    if (LSS_unlikely(signum < 1) || LSS_unlikely((size_t)signum > (8*sizeof(set->sig)))) {
 #ifdef SYS_ERRNO
       LSS_ERRNO = EINVAL;
       return -1;
@@ -5096,7 +5141,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #endif
       int rc;
       struct kernel_sigaction a;
-      if (act != NULL) {
+      if (LSS_likely(act != NULL)) {
         a             = *act;
         #ifdef __i386__
         /* On i386, the kernel requires us to always set our own
@@ -5109,7 +5154,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
          *
          * TODO: Test whether ARM needs a restorer
          */
-        if (!(a.sa_flags & SA_RESTORER)) {
+        if (LSS_likely(!(a.sa_flags & SA_RESTORER))) {
           a.sa_flags   |= SA_RESTORER;
           a.sa_restorer = (a.sa_flags & SA_SIGINFO)
                           ? LSS_NAME(restore_rt)() : LSS_NAME(restore)();
@@ -5119,12 +5164,12 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       rc = LSS_NAME(rt_sigaction)(signum, act ? &a : act, oldact,
                                   (KERNEL_NSIG+7)/8);
 #ifdef SYS_ERRNO
-      if (rc < 0 && LSS_ERRNO == ENOSYS) {
+      if (LSS_unlikely(rc < 0) && LSS_ERRNO == ENOSYS) {
 #else
-      if (rc == -ENOSYS) {
+      if (LSS_unlikely(rc == -ENOSYS)) {
 #endif
         struct kernel_old_sigaction oa, ooa, *ptr_a = &oa, *ptr_oa = &ooa;
-        if (!act) {
+        if (LSS_unlikely(!act)) {
           ptr_a            = NULL;
         } else {
           oa.sa_handler_   = act->sa_handler_;
@@ -5141,8 +5186,8 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
         LSS_ERRNO = old_errno;
 #endif
         rc = LSS_NAME(_sigaction)(signum, ptr_a, ptr_oa);
-        if (rc == 0 && oldact) {
-          if (act) {
+        if (LSS_likely(rc == 0) && oldact) {
+          if (LSS_likely(act)) {
             memcpy(oldact, act, sizeof(*act));
           } else {
             memset(oldact, 0, sizeof(*oldact));
@@ -5162,14 +5207,14 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       int old_errno = LSS_ERRNO;
       int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
-      if (rc < 0 && LSS_ERRNO == ENOSYS) {
+      if (LSS_unlikely(rc < 0) && LSS_ERRNO == ENOSYS) {
         LSS_ERRNO = old_errno;
         LSS_NAME(sigemptyset)(set);
         rc = LSS_NAME(_sigpending)(&set->sig[0]);
       }
 #else
       int rc = LSS_NAME(rt_sigpending)(set, (KERNEL_NSIG+7)/8);
-      if (rc == -ENOSYS) {
+      if (LSS_unlikely(rc == -ENOSYS)) {
         LSS_NAME(sigemptyset)(set);
         rc = LSS_NAME(_sigpending)(&set->sig[0]);
       }
@@ -5181,7 +5226,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 #ifdef SYS_ERRNO
       int olderrno = LSS_ERRNO;
       int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
-      if (rc < 0 && LSS_ERRNO == ENOSYS) {
+      if (LSS_unlikely(rc < 0) && LSS_ERRNO == ENOSYS) {
         LSS_ERRNO = olderrno;
         rc = LSS_NAME(_sigsuspend)(
         #ifndef __PPC__
@@ -5191,7 +5236,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       }
 #else
       int rc = LSS_NAME(rt_sigsuspend)(set, (KERNEL_NSIG+7)/8);
-      if (rc == -ENOSYS) {
+      if (LSS_unlikely(rc == -ENOSYS)) {
         rc = LSS_NAME(_sigsuspend)(
         #ifndef __PPC__
                                    set, 0,
@@ -5224,7 +5269,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
     /* On these architectures, implement mmap() with mmap2(). */
     LSS_INLINE void* LSS_NAME(mmap)(void *s, size_t l, int p, int f, int d,
                                     int64_t o) {
-      if (o % 4096) {
+      if (LSS_unlikely(o & 0xfff)) {
 #ifdef SYS_ERRNO
         LSS_ERRNO = EINVAL;
         return (void *) -1;
@@ -5232,7 +5277,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
         return (void *) -EINVAL;
 #endif
       }
-      return LSS_NAME(_mmap2)(s, l, p, f, d, (o / 4096));
+      return LSS_NAME(_mmap2)(s, l, p, f, d, (o >> 12));
     }
   #else
     /* Remaining 64-bit architectures. */
@@ -5425,7 +5470,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
                             : "0"(__v0)
                             : "$8", "$9", "$10", "$11", "$12",
                               "$13", "$14", "$15", "$24", "$25", "memory");
-      if (__r7) {
+      if (LSS_unlikely(__r7)) {
 #ifdef SYS_ERRNO
         unsigned long __errnovalue = __v0;
         LSS_ERRNO = __errnovalue;
@@ -5479,7 +5524,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
 
   LSS_INLINE pid_t LSS_NAME(gettid)(void) {
     pid_t tid = LSS_NAME(_gettid)();
-    if (tid >= 0) {
+    if (LSS_likely(tid >= 0)) {
       return tid;
     }
     return LSS_NAME(getpid)();
@@ -5530,7 +5575,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
     LSS_NAME(sched_yield)();
     rc = LSS_NAME(ptrace)(PTRACE_DETACH, pid, (void *)0, (void *)0);
     /* Old systems don't have tkill */
-    if (LSS_NAME(tkill)(pid, SIGCONT) == -ENOSYS)
+    if (LSS_unlikely(LSS_NAME(tkill)(pid, SIGCONT) == -ENOSYS))
       LSS_NAME(kill)(pid, SIGCONT);
 #endif
     return rc;
@@ -5714,7 +5759,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       int flags = AT_NO_AUTOMOUNT | AT_EMPTY_PATH;
       int mask = STATX_BASIC_STATS;
       int res = LSS_NAME(statx)(fd, "", flags, mask, &stx);
-      if (res == 0) LSS_NAME(cp_stat_statx)(buf, &stx);
+      if (LSS_likely(res == 0)) LSS_NAME(cp_stat_statx)(buf, &stx);
       return res;
     #endif
   }
@@ -5730,7 +5775,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       int flags = AT_NO_AUTOMOUNT | AT_STATX_SYNC_AS_STAT;
       int mask = STATX_BASIC_STATS;
       int res = LSS_NAME(statx)(AT_FDCWD, pathname, flags, mask, &stx);
-      if (res == 0) LSS_NAME(cp_stat_statx)(buf, &stx);
+      if (LSS_likely(res == 0)) LSS_NAME(cp_stat_statx)(buf, &stx);
       return res;
     #endif
   }
@@ -5746,7 +5791,7 @@ typedef LSS_LP_SELECT(struct kernel_stat, struct kernel_stat64) kernel_stat_comp
       int flags = AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW;
       int mask = STATX_BASIC_STATS;
       int res = LSS_NAME(statx)(AT_FDCWD, pathname, flags, mask, &stx);
-      if (res == 0) LSS_NAME(cp_stat_statx)(buf, &stx);
+      if (LSS_likely(res == 0)) LSS_NAME(cp_stat_statx)(buf, &stx);
       return res;
     #endif
   }
@@ -5891,7 +5936,7 @@ LSS_INLINE int LSS_NAME(fexecve)(int fd, const char *const *argv, const char *co
 
 LSS_INLINE uint32_t LSS_NAME(sleep)(uint32_t seconds) {
 #if !defined(__LP64__)
-  if (seconds > INT_MAX) return seconds - INT_MAX + LSS_NAME(sleep)(INT_MAX);
+  if (LSS_unlikely(seconds > INT_MAX)) return seconds - INT_MAX + LSS_NAME(sleep)(INT_MAX);
 #endif
   struct kernel_timespec ts = {(long)seconds, 0};
   return LSS_NAME(nanosleep)(&ts, &ts) < 0 ? ts.tv_sec : 0;
@@ -6456,7 +6501,7 @@ LSS_INLINE T LSS_NAME(syscall)(long number, Args... args) {
   for (long result;;) {
     result = LSS_NAME(__syscall_impl)(number, (long)args...);
     LSS_if_constexpr(kRetryIfInterrupted) {
-      if (result == -EINTR) continue;
+      if (LSS_unlikely(result == -EINTR)) continue;
     }
     LSS_RETURN(T, result);
   }
